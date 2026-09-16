@@ -1,0 +1,52 @@
+[Unit]
+Description=mcCore Node Agent
+Documentation=https://github.com/cometa-mccore/mccore
+After=network-online.target mccore-control.service mccore-runtime.service
+Wants=network-online.target
+Requires=mccore-runtime.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=mccore
+Group=mccore
+WorkingDirectory=/var/lib/mccore/agent
+EnvironmentFile=/etc/mccore/mccore.env
+ExecStart=/opt/mccore/bin/mcagent --config /etc/mccore/mccore.env
+Restart=on-failure
+RestartSec=2
+
+# §26/§27: stopping or restarting this unit must NEVER kill the Minecraft
+# server processes it manages — only the Agent's own main process gets the
+# stop signal. The default KillMode (control-group) would SIGTERM every
+# process in the unit's cgroup, including any running Minecraft server —
+# exactly what must not happen. Because of this, Minecraft server
+# processes are intentionally *not* nested under this unit's own cgroup at
+# all (they live under mccore-runtime.service instead, see
+# installer/systemd/mccore-runtime.service and internal/cgroup) — KillMode
+# below is a second, independent safeguard, not the only one.
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening (§7), balanced against real needs: the Agent manages Minecraft
+# processes and files under /var/lib/mccore, so — unlike the Control Plane
+# and Web units — it cannot use ProtectSystem=strict or a fully empty
+# CapabilityBoundingSet.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/mccore /var/log/mccore /sys/fs/cgroup/system.slice/mccore-runtime.service
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=false
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

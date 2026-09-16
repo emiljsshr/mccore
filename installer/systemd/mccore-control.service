@@ -1,0 +1,50 @@
+[Unit]
+Description=mcCore Control Plane
+Documentation=https://github.com/cometa-mccore/mccore
+After=network-online.target postgresql.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=mccore
+Group=mccore
+WorkingDirectory=/opt/mccore/current/apps/control-plane
+EnvironmentFile=/etc/mccore/mccore.env
+Environment=NODE_ENV=production
+# Runs via tsx (not `node dist/server.js`) even in production: Prisma's
+# generated client (packages/database/src/generated/prisma) emits relative
+# imports without a ".js" extension, which is valid under TypeScript's
+# "bundler" module resolution (used by both tsx and the editor/typecheck)
+# but is rejected by plain Node's strict ESM resolver at runtime. tsx's
+# loader hook resolves it correctly for the entry file *and* every
+# transitively-loaded module, including compiled dist/ output — verified
+# directly (`node dist/server.js` fails with ERR_MODULE_NOT_FOUND on
+# generated/prisma/internal/class; `tsx src/server.ts` starts cleanly).
+# `tsc`'s build (`npm run build`) is still run and still useful (type
+# declarations, a frozen dist/ artifact for @mccore/contracts and
+# @mccore/database), it just isn't what actually executes.
+ExecStart=/opt/mccore/node/bin/node /opt/mccore/current/node_modules/tsx/dist/cli.mjs /opt/mccore/current/apps/control-plane/src/server.ts
+Restart=on-failure
+RestartSec=2
+
+# Hardening (§7). The control plane never touches Minecraft server files or
+# spawns processes itself — only the Agent does — so it can run under much
+# tighter restrictions than mccore-agent.service.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/var/log/mccore
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

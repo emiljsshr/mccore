@@ -1,0 +1,853 @@
+// mcCore database schema (see docs/architecture.md).
+// IDs: ULIDs generated in application code (packages/contracts `ulid()`),
+// stored as 26-char strings. No sequential integer IDs are exposed.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --------------------------------------------------------------- Identity --
+
+model User {
+  id           String    @id @db.VarChar(26)
+  name         String
+  email        String    @unique
+  passwordHash String
+  avatarSeed   String
+  status       UserStatus @default(ACTIVE)
+  isSuperAdmin Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastActiveAt DateTime?
+
+  sessions          Session[]
+  userRoles         UserRole[]
+  serverAccess      UserServerAccess[]
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  twoFactor         TwoFactorCredential?
+  recoveryCodes     RecoveryCode[]
+  passwordResets    PasswordResetToken[]
+  createdBackups    Backup[]              @relation("BackupCreatedBy")
+  createdSchedules  Schedule[]
+  enrollmentTokens  EnrollmentToken[]
+  eulaAcceptances   EulaAcceptance[]
+  createdOperations Operation[]
+
+  @@index([email])
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+model Session {
+  id         String    @id @db.VarChar(26)
+  userId     String    @db.VarChar(26)
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  lastSeenAt DateTime  @default(now())
+  ipAddress  String?
+  userAgent  String?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model TwoFactorCredential {
+  id            String    @id @db.VarChar(26)
+  userId        String    @unique @db.VarChar(26)
+  secretEncrypted String  // AES-256-GCM, key = ENCRYPTION_KEY from /etc/mccore/mccore.env
+  enabled       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  confirmedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RecoveryCode {
+  id        String    @id @db.VarChar(26)
+  userId    String    @db.VarChar(26)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @db.VarChar(26)
+  userId    String    @db.VarChar(26)
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model BootstrapToken {
+  id        String    @id @db.VarChar(26)
+  codeHash  String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+}
+
+// -------------------------------------------------------------------- RBAC --
+
+model Role {
+  id             String   @id @db.VarChar(26)
+  name           String   @unique
+  label          String
+  description    String
+  isSystem       Boolean  @default(false)
+  isGlobalAccess Boolean  @default(false) // if true, members see all servers regardless of UserServerAccess
+  priority       Int      @default(100)   // lower = more privileged; used to pick a "primary" role for display
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+}
+
+model Permission {
+  id          String @id // e.g. "server.start" — matches packages/contracts PERMISSIONS
+  label       String
+  description String
+  group       String
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String @db.VarChar(26)
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId    String   @db.VarChar(26)
+  roleId    String   @db.VarChar(26)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+/// §44 — per-server access grants for non-global roles (e.g. a Moderator
+/// scoped to only "Survival" and "Lobby"). Presence of a row = visibility;
+/// absence for a non-global-access user = no access to that server.
+model UserServerAccess {
+  id        String   @id @db.VarChar(26)
+  userId    String   @db.VarChar(26)
+  serverId  String   @db.VarChar(26)
+  createdAt DateTime @default(now())
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serverId])
+}
+
+// -------------------------------------------------------------------- Node --
+
+model Node {
+  id               String     @id @db.VarChar(26)
+  name             String
+  location         String     @default("")
+  status           NodeStatus @default(OFFLINE)
+  isLocal          Boolean    @default(false)
+  hostname         String
+  ipAddress        String
+  os               String
+  kernel           String
+  arch             String
+  cpuModel         String
+  cpuCores         Int
+  memoryTotalMb    Int
+  diskTotalMb      Int
+  agentVersion     String
+  protocolVersion  Int
+  lastHeartbeatAt  DateTime?
+  lastSeq          Int        @default(0)
+  // Current-value snapshot, updated on every heartbeat (~10s) for fast
+  // reads; NodeMetric holds the downsampled historical series for charts.
+  cpuUsagePercent  Float      @default(0)
+  memoryUsedMb     Int        @default(0)
+  diskUsedMb       Int        @default(0)
+  loadAverage1m    Float      @default(0)
+  networkInMbps    Float      @default(0)
+  networkOutMbps   Float      @default(0)
+  javaInstallations Json      @default("[]")
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  credentials NodeCredential[]
+  metrics     NodeMetric[]
+  servers     MinecraftServer[]
+  allocations ServerAllocation[]
+  events      AgentEvent[]
+  nonces      AgentNonce[]
+
+  @@index([status])
+}
+
+enum NodeStatus {
+  HEALTHY
+  DEGRADED
+  OFFLINE
+}
+
+/// Ed25519 node identity (§17). `isActive` supports rotation: a new key can
+/// be added before the old one is revoked so an in-flight agent isn't locked
+/// out mid-rotation.
+model NodeCredential {
+  id         String    @id @db.VarChar(26)
+  nodeId     String    @db.VarChar(26)
+  publicKey  String    // base64
+  algorithm  String    @default("ed25519")
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId, isActive])
+}
+
+/// Replay protection for the agent handshake (§42): (nodeId, nonce) must be
+/// unique; rows older than the handshake window are pruned periodically.
+model AgentNonce {
+  id        String   @id @db.VarChar(26)
+  nodeId    String   @db.VarChar(26)
+  nonce     String
+  seenAt    DateTime @default(now())
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, nonce])
+  @@index([seenAt])
+}
+
+model NodeMetric {
+  id                String   @id @db.VarChar(26)
+  nodeId            String   @db.VarChar(26)
+  timestamp         DateTime @default(now())
+  cpuUsagePercent   Float
+  memoryUsedMb      Int
+  diskUsedMb        Int
+  loadAverage1m     Float
+  networkInMbps     Float
+  networkOutMbps    Float
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId, timestamp])
+}
+
+model EnrollmentToken {
+  id            String    @id @db.VarChar(26)
+  label         String
+  tokenHash     String    @unique
+  /// Null for the one token the installer creates directly in the
+  /// database for local-node auto-enrollment (§15), which happens before
+  /// any User exists. Every other token is admin-issued over the
+  /// authenticated HTTP API and always has a creator.
+  createdByUserId String? @db.VarChar(26)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  usedAt        DateTime?
+  nodeId        String?   @db.VarChar(26)
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id])
+}
+
+// --------------------------------------------------------------- Servers --
+
+model MinecraftServer {
+  id                     String        @id @db.VarChar(26)
+  name                   String
+  description            String?
+  icon                   String        @default("Server")
+  status                 ServerStatus  @default(INSTALLING)
+  software               MinecraftSoftware
+  minecraftVersion       String
+  build                  String?
+  javaVersion            String
+  nodeId                 String        @db.VarChar(26)
+  networkId              String?       @db.VarChar(26)
+  host                   String        @default("0.0.0.0")
+  port                   Int
+  onlinePlayers          Int           @default(0)
+  maxPlayers             Int           @default(20)
+  memoryMinMb            Int
+  memoryMaxMb            Int
+  cpuLimitPercent        Int
+  diskLimitMb            Int
+  world                  String        @default("world")
+  difficulty             Difficulty    @default(NORMAL)
+  gameMode               GameMode      @default(SURVIVAL)
+  onlineMode             Boolean       @default(true)
+  whitelist              Boolean       @default(false)
+  pvp                    Boolean       @default(true)
+  commandBlocks          Boolean       @default(false)
+  serverDirectory        String
+  jarFile                String        @default("server.jar")
+  autoStart              Boolean       @default(false)
+  autoRestart            Boolean       @default(true)
+  tags                   String[]      @default([])
+  currentPid             Int?
+  lastTps                Float         @default(20)
+  lastMspt               Float         @default(0)
+  cpuPercent             Float         @default(0)
+  memoryUsedMb           Int           @default(0)
+  diskUsedMb             Int           @default(0)
+  lockedOperationId      String?       @db.VarChar(26)
+  lockedAt               DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  lastStartedAt          DateTime?
+  deletedAt              DateTime?
+
+  node               Node                @relation(fields: [nodeId], references: [id])
+  network            Network?            @relation("NetworkBackends", fields: [networkId], references: [id])
+  allocations        ServerAllocation[]
+  environmentVars    ServerEnvironment[]
+  playerSessions     PlayerSession[]
+  bans               PlayerBan[]
+  whitelistEntries   WhitelistEntry[]
+  operatorEntries    OperatorEntry[]
+  installedPlugins   InstalledPlugin[]
+  worlds             World[]
+  backups            Backup[]
+  schedules          Schedule[]
+  metrics            ServerMetric[]
+  fileAuditEvents    FileAuditEvent[]
+  userAccess         UserServerAccess[]
+  eulaAcceptances    EulaAcceptance[]
+  proxyForNetwork    Network?            @relation("NetworkProxy")
+
+  @@index([nodeId])
+  @@index([status])
+}
+
+enum ServerStatus {
+  INSTALLING
+  OFFLINE
+  STARTING
+  ONLINE
+  STOPPING
+  RESTARTING
+  CRASHED
+  ERROR
+  SUSPENDED
+}
+
+enum MinecraftSoftware {
+  PAPER
+  PURPUR
+  VANILLA
+  FABRIC
+  FORGE
+  NEOFORGE
+  VELOCITY
+}
+
+enum GameMode {
+  SURVIVAL
+  CREATIVE
+  ADVENTURE
+  SPECTATOR
+}
+
+enum Difficulty {
+  PEACEFUL
+  EASY
+  NORMAL
+  HARD
+}
+
+model ServerAllocation {
+  id        String   @id @db.VarChar(26)
+  nodeId    String   @db.VarChar(26)
+  ip        String
+  port      Int
+  protocol  String   @default("TCP") // TCP | UDP
+  serverId  String?  @db.VarChar(26)
+  createdAt DateTime @default(now())
+
+  node   Node             @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  server MinecraftServer? @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@unique([nodeId, ip, port, protocol])
+}
+
+model ServerEnvironment {
+  id       String @id @db.VarChar(26)
+  serverId String @db.VarChar(26)
+  key      String
+  value    String
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, key])
+}
+
+model Network {
+  id            String   @id @db.VarChar(26)
+  name          String
+  description   String?
+  proxyServerId String   @unique @db.VarChar(26)
+  createdAt     DateTime @default(now())
+
+  proxyServer MinecraftServer   @relation("NetworkProxy", fields: [proxyServerId], references: [id], onDelete: Cascade)
+  backends    MinecraftServer[] @relation("NetworkBackends")
+}
+
+model EulaAcceptance {
+  id          String   @id @db.VarChar(26)
+  userId      String   @db.VarChar(26)
+  serverId    String   @db.VarChar(26)
+  eulaVersion String   @default("2024-01")
+  acceptedAt  DateTime @default(now())
+
+  user   User            @relation(fields: [userId], references: [id])
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+// --------------------------------------------------------------- Players --
+
+model Player {
+  id              String   @id @db.VarChar(26)
+  uuid            String   @unique
+  username        String
+  avatarSeed      String
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  playtimeSeconds Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  sessions   PlayerSession[]
+  bans       PlayerBan[]
+  whitelists WhitelistEntry[]
+  operators  OperatorEntry[]
+
+  @@index([username])
+}
+
+model PlayerSession {
+  id              String    @id @db.VarChar(26)
+  playerId        String    @db.VarChar(26)
+  serverId        String    @db.VarChar(26)
+  joinedAt        DateTime  @default(now())
+  leftAt          DateTime?
+  durationSeconds Int?
+
+  player Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, leftAt])
+  @@index([playerId])
+}
+
+model PlayerBan {
+  id                String    @id @db.VarChar(26)
+  serverId          String    @db.VarChar(26)
+  playerId          String    @db.VarChar(26)
+  reason            String?
+  bannedByUserId    String?   @db.VarChar(26)
+  bannedAt          DateTime  @default(now())
+  expiresAt         DateTime?
+  pardonedAt        DateTime?
+  pardonedByUserId  String?   @db.VarChar(26)
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  player Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, playerId])
+}
+
+model WhitelistEntry {
+  id            String   @id @db.VarChar(26)
+  serverId      String   @db.VarChar(26)
+  playerId      String   @db.VarChar(26)
+  addedByUserId String?  @db.VarChar(26)
+  addedAt       DateTime @default(now())
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  player Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, playerId])
+}
+
+model OperatorEntry {
+  id            String   @id @db.VarChar(26)
+  serverId      String   @db.VarChar(26)
+  playerId      String   @db.VarChar(26)
+  level         Int      @default(4)
+  addedByUserId String?  @db.VarChar(26)
+  addedAt       DateTime @default(now())
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  player Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, playerId])
+}
+
+// --------------------------------------------------------------- Plugins --
+
+/// Marketplace search-result cache (§32-style caching, applied to plugin
+/// metadata too — avoid hammering the provider API on every browse).
+model Plugin {
+  id                String   @id @db.VarChar(26)
+  providerSlug      String
+  providerProjectId String
+  name              String
+  description       String
+  author            String
+  category          String
+  downloads         Int      @default(0)
+  rating             Float    @default(0)
+  supportedVersions String[] @default([])
+  iconUrl           String?
+  verified          Boolean  @default(false)
+  cachedAt          DateTime @default(now())
+
+  @@unique([providerSlug, providerProjectId])
+}
+
+model InstalledPlugin {
+  id                String    @id @db.VarChar(26)
+  serverId          String    @db.VarChar(26)
+  name              String
+  version           String
+  latestVersion     String?
+  author            String
+  description       String
+  status            PluginStatus @default(ENABLED)
+  category          String
+  fileSizeMb        Float
+  fileName          String
+  installedAt       DateTime  @default(now())
+  providerSlug      String?
+  providerProjectId String?
+  checksumSha256    String?
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, fileName])
+}
+
+enum PluginStatus {
+  ENABLED
+  DISABLED
+  ERROR
+}
+
+// --------------------------------------------------------------- Worlds --
+
+model World {
+  id            String   @id @db.VarChar(26)
+  serverId      String   @db.VarChar(26)
+  name          String
+  directoryName String
+  environment   String   @default("overworld")
+  sizeMb        Float    @default(0)
+  seed          String   @default("")
+  difficulty    Difficulty @default(NORMAL)
+  gameMode      GameMode   @default(SURVIVAL)
+  structures    Boolean  @default(true)
+  hardcore      Boolean  @default(false)
+  lastBackupAt  DateTime?
+  generator     String   @default("default")
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, directoryName])
+}
+
+// -------------------------------------------------------------- Backups --
+
+model Backup {
+  id               String       @id @db.VarChar(26)
+  serverId         String       @db.VarChar(26)
+  name             String
+  createdAt        DateTime     @default(now())
+  sizeMb           Float        @default(0)
+  type             BackupType
+  status           BackupStatus @default(IN_PROGRESS)
+  storageProvider  String       @default("local")
+  storagePath      String
+  includesWorlds   Boolean      @default(true)
+  includesPlugins  Boolean      @default(true)
+  includesConfig   Boolean      @default(true)
+  compression      String       @default("fast")
+  checksumSha256   String?
+  errorMessage     String?
+  createdByUserId  String?      @db.VarChar(26)
+
+  server    MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdBy User?           @relation("BackupCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([serverId, createdAt])
+}
+
+enum BackupType {
+  AUTOMATIC
+  MANUAL
+}
+
+enum BackupStatus {
+  COMPLETED
+  IN_PROGRESS
+  FAILED
+}
+
+// ------------------------------------------------------------ Schedules --
+
+model Schedule {
+  id                  String    @id @db.VarChar(26)
+  serverId            String    @db.VarChar(26)
+  name                String
+  action              String
+  commandPayload      String?
+  cronExpression      String
+  timezone            String    @default("UTC")
+  enabled             Boolean   @default(true)
+  nextRunAt           DateTime?
+  lastRunAt           DateTime?
+  createdByUserId     String?   @db.VarChar(26)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  server     MinecraftServer     @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  createdBy  User?               @relation(fields: [createdByUserId], references: [id])
+  executions ScheduleExecution[]
+
+  @@index([serverId])
+  @@index([enabled, nextRunAt])
+}
+
+/// A `RUNNING` row for a given scheduleId is the execution lock (§40/§72):
+/// the scheduler only starts a new run if no `RUNNING` row exists for that
+/// schedule, enforced inside a transaction with `SELECT ... FOR UPDATE`.
+model ScheduleExecution {
+  id          String    @id @db.VarChar(26)
+  scheduleId  String    @db.VarChar(26)
+  status      ScheduleExecutionStatus @default(RUNNING)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  message     String?
+
+  schedule Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, status])
+}
+
+enum ScheduleExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// --------------------------------------------------------------- Audit --
+
+model AuditLog {
+  id             String       @id @db.VarChar(26)
+  actorUserId    String?      @db.VarChar(26)
+  actorIsSystem  Boolean      @default(false)
+  action         String
+  description    String
+  targetType     String?
+  targetLabel    String?
+  serverId       String?      @db.VarChar(26)
+  resourceId     String?
+  severity       AuditSeverity @default(INFO)
+  ipAddress      String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([createdAt])
+  @@index([serverId])
+  @@index([actorUserId])
+}
+
+enum AuditSeverity {
+  INFO
+  SUCCESS
+  WARNING
+  CRITICAL
+}
+
+model Notification {
+  id        String              @id @db.VarChar(26)
+  userId    String?             @db.VarChar(26) // null = broadcast to all users with settings.view
+  type      NotificationType
+  title     String
+  message   String
+  serverId  String?             @db.VarChar(26)
+  read      Boolean             @default(false)
+  createdAt DateTime            @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  CRITICAL
+}
+
+// -------------------------------------------------------------- API keys --
+
+model ApiKey {
+  id          String     @id @db.VarChar(26)
+  userId      String     @db.VarChar(26)
+  label       String
+  scopes      String[]
+  keyHash     String     @unique
+  keyPreview  String
+  createdAt   DateTime   @default(now())
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ------------------------------------------------------------- Settings --
+
+model SystemSetting {
+  key             String   @id
+  value           Json
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?  @db.VarChar(26)
+}
+
+// -------------------------------------------------------------- Metrics --
+
+model ServerMetric {
+  id            String   @id @db.VarChar(26)
+  serverId      String   @db.VarChar(26)
+  timestamp     DateTime @default(now())
+  cpuPercent    Float
+  memoryUsedMb  Int
+  tps           Float
+  mspt          Float
+  playersOnline Int
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, timestamp])
+}
+
+// --------------------------------------------------------------- Agent --
+
+/// Durable log of significant agent-originated events (not every heartbeat —
+/// those only update Node.lastHeartbeatAt / NodeMetric). Retained on a
+/// rolling window for troubleshooting and as an audit trail of agent
+/// activity independent of AuditLog (which is user-action-centric).
+model AgentEvent {
+  id        String   @id @db.VarChar(26)
+  nodeId    String   @db.VarChar(26)
+  seq       Int
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId, seq])
+  @@index([createdAt])
+}
+
+model FileAuditEvent {
+  id        String   @id @db.VarChar(26)
+  serverId  String   @db.VarChar(26)
+  userId    String?  @db.VarChar(26)
+  action    String // READ | WRITE | DELETE | RENAME | UPLOAD | DOWNLOAD | MKDIR
+  path      String
+  createdAt DateTime @default(now())
+
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt])
+}
+
+// ---------------------------------------------------------- Operations --
+
+model Operation {
+  id              String          @id @db.VarChar(26)
+  type            String
+  resourceId      String
+  status          OperationStatus @default(PENDING)
+  progress        Int             @default(0)
+  message         String?
+  errorCode       String?
+  /// Structured context set at creation time (e.g. resolved plugin metadata
+  /// for PLUGIN_INSTALL) that the async completion handler needs but that
+  /// doesn't belong in the human-readable `message` field.
+  metadata        Json?
+  idempotencyKey  String?         @unique
+  createdByUserId String?         @db.VarChar(26)
+  createdAt       DateTime        @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id])
+
+  @@index([resourceId])
+  @@index([status])
+}
+
+enum OperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+// ----------------------------------------------------------- Idempotency --
+
+model IdempotencyKey {
+  key              String   @id
+  userId           String   @db.VarChar(26)
+  endpoint         String
+  responseStatus   Int?
+  responseSnapshot Json?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  @@index([expiresAt])
+}

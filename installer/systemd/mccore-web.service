@@ -1,0 +1,39 @@
+[Unit]
+Description=mcCore Web (Next.js)
+Documentation=https://github.com/cometa-mccore/mccore
+After=network-online.target mccore-control.service
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=mccore
+Group=mccore
+WorkingDirectory=/opt/mccore/current/web
+EnvironmentFile=/etc/mccore/mccore.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/opt/mccore/node/bin/node /opt/mccore/current/web/server.js
+Restart=on-failure
+RestartSec=2
+
+# Hardening (§7) — the web process never runs as root and never touches
+# Minecraft server files directly; all of that goes through the Control
+# Plane's API.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+ReadWritePaths=/var/log/mccore
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=mcCore delegated Minecraft process group
+Before=mccore-agent.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=mccore
+Group=mccore
+ExecStart=/bin/true
+Delegate=cpu memory pids
+TasksMax=infinity
+
+[Install]
+WantedBy=multi-user.target

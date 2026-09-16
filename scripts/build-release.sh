@@ -47,7 +47,11 @@ mkdir -p "$stage/bin" "$stage/apps/control-plane" "$stage/packages" "$stage/web"
 run_step "Building node agent binaries" -- build_agent_binaries
 
 package_archive() {
-  cp -a apps/control-plane/dist apps/control-plane/package.json "$stage/apps/control-plane/"
+  cp -a apps/control-plane/dist apps/control-plane/package.json apps/control-plane/tsconfig.json "$stage/apps/control-plane/"
+  # mccore-control.service runs src/server.ts via tsx, not dist/server.js
+  # (see the comment on that unit's ExecStart), so the source tree itself
+  # has to ship too, not just its tsc-compiled dist/ output.
+  cp -a apps/control-plane/src "$stage/apps/control-plane/"
   mkdir -p "$stage/packages/contracts" "$stage/packages/database/src"
   cp -a packages/contracts/dist packages/contracts/package.json "$stage/packages/contracts/"
   cp -a packages/database/dist packages/database/package.json packages/database/prisma packages/database/prisma.config.ts "$stage/packages/database/"

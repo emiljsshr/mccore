@@ -1,3 +1,5 @@
+import { ulid } from "@mccore/contracts";
+
 export class ApiRequestError extends Error {
   constructor(public code: string, message: string, public status: number) {
     super(message);
@@ -20,5 +22,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
 export function mutation(method: string, body?: unknown, idempotent = false): RequestInit {
   return { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    ...(idempotent ? { headers: { "Idempotency-Key": crypto.randomUUID() } } : {}) };
+    // Not crypto.randomUUID(): it's undefined outside secure contexts
+    // (HTTPS/localhost), and this installer explicitly supports HTTP-only
+    // deployments on a trusted network (see installer/install.sh).
+    ...(idempotent ? { headers: { "Idempotency-Key": ulid() } } : {}) };
 }

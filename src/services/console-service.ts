@@ -1,6 +1,7 @@
 import type { ConsoleLine } from "@/types";
 import { api, mutation } from "@/lib/api";
 import { subscribeLive } from "@/lib/live";
+import { ulid } from "@mccore/contracts";
 export async function getConsoleHistory(serverId: string): Promise<ConsoleLine[]> {
   return (await api<{ lines: ConsoleLine[] }>(`/servers/${serverId}/console`)).lines;
 }
@@ -11,5 +12,6 @@ export function subscribeToConsole(serverId: string, onLine: (line: ConsoleLine)
 }
 export async function sendCommand(serverId: string, command: string): Promise<ConsoleLine> {
   await api(`/servers/${serverId}/console/command`, mutation("POST", { command }));
-  return { id: crypto.randomUUID(), timestamp: new Date().toISOString(), level: "COMMAND", message: command };
+  // Not crypto.randomUUID(): undefined outside secure contexts (HTTPS/localhost).
+  return { id: ulid(), timestamp: new Date().toISOString(), level: "COMMAND", message: command };
 }

@@ -267,17 +267,30 @@ and installer together, beyond what §1–§5 originally specified:
   for `--release-url`) — `--archive` from a locally-built tarball is the
   practical path until one exists — but the build tooling itself is
   real and complete, not a stub.
-- **Cgroup delegation uses a dedicated oneshot service
-  (`installer/systemd/mccore-runtime.service`, `ExecStart=/bin/true`,
-  `RemainAfterExit=yes`, `Delegate=cpu memory pids`), not a `.slice`
-  unit.** Both are valid systemd patterns for the same goal (give the
-  unprivileged `mccore` user a delegated cgroup subtree that never holds
-  a "real" process of its own, avoiding cgroup v2's "no internal
-  process" conflict with `mccore-agent.service`'s own cgroup, which does
-  hold the Agent's PID) — this was simply the version that ended up
-  wired through consistently across `mccore-agent.service` and
-  `services/agent/internal/cgroup/cgroup_linux.go` (`cgroupBase =
-  "/sys/fs/cgroup/system.slice/mccore-runtime.service"`).
+- **Cgroup delegation uses a dedicated service
+  (`installer/systemd/mccore-runtime.service`, `Delegate=cpu memory
+  pids`), not a `.slice` unit** — gives the unprivileged `mccore` user a
+  delegated cgroup subtree that never holds a "real" process of its own
+  at the top level, avoiding cgroup v2's "no internal process" conflict
+  with `mccore-agent.service`'s own cgroup, which does hold the Agent's
+  PID. Minecraft server processes live in subdirectories of it
+  (`services/agent/internal/cgroup/cgroup_linux.go`'s `cgroupBase =
+  "/sys/fs/cgroup/system.slice/mccore-runtime.service"`, joined with each
+  server's ID), never as direct children.
+  It originally ran as `Type=oneshot`/`ExecStart=/bin/true` with
+  `RemainAfterExit=yes`, on the theory that an empty delegated cgroup
+  would persist once "active (exited)". Live installation on a real
+  Ubuntu host disproved that: once `/bin/true` exited, systemd pruned the
+  now-empty cgroup directory despite `RemainAfterExit=yes`, so
+  `mccore-agent.service` failed at its NAMESPACE step (`ReadWritePaths=`
+  referencing a path that no longer existed) every time it started. Fixed
+  by keeping one real, harmless process resident instead
+  (`Type=simple`, `ExecStart=/usr/bin/sleep infinity`, `Restart=always`),
+  which keeps the cgroup directory alive for as long as the unit is
+  active. `KillMode=process` (matching `mccore-agent.service`'s own
+  reasoning, and now load-bearing rather than just a second safeguard)
+  ensures stopping/restarting this unit only ever signals the `sleep`
+  placeholder, never anything nested underneath it.
 - **CSRF hardening beyond `SameSite=Lax`**: `apps/control-plane/src/plugins/core.ts`
   rejects state-changing requests (non-GET/HEAD/OPTIONS) or WebSocket
   upgrades whose `Origin` header doesn't match `PUBLIC_URL`, or whose

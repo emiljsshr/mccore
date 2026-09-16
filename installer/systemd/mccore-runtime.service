@@ -3,13 +3,30 @@ Description=mcCore delegated Minecraft process group
 Before=mccore-agent.service
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+# Not Type=oneshot/ExecStart=/bin/true: that exits immediately, and once no
+# process is left in the delegated cgroup, systemd may prune the (empty)
+# cgroup directory even with RemainAfterExit=yes — observed live as the
+# Agent failing to start with "Failed to set up mount namespacing:
+# /sys/fs/cgroup/system.slice/mccore-runtime.service: No such file or
+# directory". `sleep infinity` keeps one real, harmless process resident in
+# the cgroup for as long as this unit is active, which keeps the directory
+# (and the delegation) alive for internal/cgroup and mccore-agent.service's
+# ReadWritePaths= to rely on.
+Type=simple
 User=mccore
 Group=mccore
-ExecStart=/bin/true
+ExecStart=/usr/bin/sleep infinity
+Restart=always
+RestartSec=2
 Delegate=cpu memory pids
 TasksMax=infinity
+
+# Minecraft server processes live in subdirectories of this unit's cgroup
+# (internal/cgroup creates cgroupBase/<serverId>), never as direct children
+# of it — KillMode=process (matching mccore-agent.service's own reasoning)
+# means stopping/restarting this unit only ever signals the `sleep`
+# placeholder, not anything nested underneath it.
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target

@@ -28,11 +28,15 @@ cd "$root"
 source /etc/os-release
 [[ ${ID:-} == ubuntu || ${ID:-} == debian ]] || fail "Supported distributions: Ubuntu Server and Debian. Detected: ${ID:-unknown}."
 
-export DEBIAN_FRONTEND=noninteractive
 log=/tmp/mccore-bootstrap-$$.log
-printf 'Installing build prerequisites (log: %s)...\n' "$log"
-apt-get update >>"$log" 2>&1
-apt-get install -y ca-certificates curl git build-essential python3 >>"$log" 2>&1
+: >"$log"
+# shellcheck source=installer/lib/ui.sh
+source "$root/installer/lib/ui.sh"
+
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+
+export DEBIAN_FRONTEND=noninteractive
 
 # --- Architecture: Node.js and Go each use their own naming convention
 # for the same two architectures (Node: x64/arm64, Go: amd64/arm64) — both
@@ -44,6 +48,15 @@ case "$(uname -m)" in
   *) fail "Unsupported architecture: $(uname -m). mcCore supports amd64 and arm64." ;;
 esac
 
+ui_header "mcCore installer"
+ui_note "Full log: $log"
+
+install_prereqs() {
+  apt-get update
+  apt-get install -y ca-certificates curl git build-essential python3
+}
+run_step "Installing prerequisites" -- install_prereqs
+
 # --- Node.js (build-time toolchain; separate from the runtime copy the
 # installer itself places under /opt/mccore/node) -------------------------
 need_node=1
@@ -52,34 +65,34 @@ if command -v node >/dev/null 2>&1; then
   [[ $current_major -ge 20 ]] && need_node=0
 fi
 if [[ $need_node == 1 ]]; then
-  printf 'Installing Node.js (build toolchain)...\n'
-  work=$(mktemp -d)
-  trap 'rm -rf -- "$work"' EXIT
-  curl --proto '=https' --fail --show-error --location https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/shasums"
-  node_tar=$(awk -v a="$node_arch" '$2 ~ ("-linux-" a "\\.tar\\.xz$") {print $2}' "$work/shasums")
-  [[ $node_tar =~ ^node-v24\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || fail 'Invalid Node distribution metadata.'
-  curl --proto '=https' --fail --show-error --location "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
-  (cd "$work" && awk -v f="$node_tar" '$2==f' shasums | sha256sum -c -) >>"$log"
-  install -d /usr/local/lib/mccore-build-node
-  tar --strip-components=1 -xJf "$work/$node_tar" -C /usr/local/lib/mccore-build-node
-  ln -sf /usr/local/lib/mccore-build-node/bin/node /usr/local/bin/node
-  ln -sf /usr/local/lib/mccore-build-node/bin/npm /usr/local/bin/npm
-  ln -sf /usr/local/lib/mccore-build-node/bin/npx /usr/local/bin/npx
+  install_node() {
+    curl --proto '=https' --fail --show-error --location https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/shasums"
+    node_tar=$(awk -v a="$node_arch" '$2 ~ ("-linux-" a "\\.tar\\.xz$") {print $2}' "$work/shasums")
+    [[ $node_tar =~ ^node-v24\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || { echo 'Invalid Node distribution metadata.' >&2; return 1; }
+    curl --proto '=https' --fail --show-error --location "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
+    (cd "$work" && awk -v f="$node_tar" '$2==f' shasums | sha256sum -c -)
+    install -d /usr/local/lib/mccore-build-node
+    tar --strip-components=1 -xJf "$work/$node_tar" -C /usr/local/lib/mccore-build-node
+    ln -sf /usr/local/lib/mccore-build-node/bin/node /usr/local/bin/node
+    ln -sf /usr/local/lib/mccore-build-node/bin/npm /usr/local/bin/npm
+    ln -sf /usr/local/lib/mccore-build-node/bin/npx /usr/local/bin/npx
+  }
+  run_step "Installing Node.js toolchain" -- install_node
+else
+  ui_note "Node.js toolchain already present, skipping"
 fi
 
 # --- Go (only needed to compile the Agent/CLI binaries) -------------------
 if ! command -v go >/dev/null 2>&1; then
-  printf 'Installing Go (build toolchain)...\n'
-  work=${work:-$(mktemp -d)}
-  trap 'rm -rf -- "$work"' EXIT
-  go_version=$(curl --proto '=https' --fail --show-error --location https://go.dev/VERSION?m=text | head -1)
-  go_tar="${go_version}.linux-${go_arch}.tar.gz"
-  curl --proto '=https' --fail --show-error --location "https://go.dev/dl/${go_tar}" -o "$work/$go_tar"
-  # go.dev doesn't serve a plain "<file>.sha256" sidecar (that returns an
-  # HTML redirect page, not a checksum) — the official source of checksums
-  # is the JSON release index. Verified live while building this installer.
-  curl --proto '=https' --fail --show-error --location "https://go.dev/dl/?mode=json&include=all" -o "$work/go-releases.json"
-  go_sha256=$(python3 -c "
+  install_go() {
+    go_version=$(curl --proto '=https' --fail --show-error --location https://go.dev/VERSION?m=text | head -1)
+    go_tar="${go_version}.linux-${go_arch}.tar.gz"
+    curl --proto '=https' --fail --show-error --location "https://go.dev/dl/${go_tar}" -o "$work/$go_tar"
+    # go.dev doesn't serve a plain "<file>.sha256" sidecar (that returns an
+    # HTML redirect page, not a checksum) — the official source of checksums
+    # is the JSON release index.
+    curl --proto '=https' --fail --show-error --location "https://go.dev/dl/?mode=json&include=all" -o "$work/go-releases.json"
+    go_sha256=$(python3 -c "
 import json, sys
 with open('$work/go-releases.json') as fh:
     releases = json.load(fh)
@@ -89,20 +102,22 @@ for release in releases:
             print(f['sha256'])
             sys.exit(0)
 sys.exit(1)
-") || fail "Could not find an official checksum for $go_tar in the Go release index."
-  printf '%s  %s\n' "$go_sha256" "$work/$go_tar" | sha256sum -c - >>"$log"
-  install -d /usr/local/lib/mccore-build-go
-  tar --strip-components=1 -xzf "$work/$go_tar" -C /usr/local/lib/mccore-build-go
-  ln -sf /usr/local/lib/mccore-build-go/bin/go /usr/local/bin/go
+") || { printf 'Could not find an official checksum for %s in the Go release index.\n' "$go_tar" >&2; return 1; }
+    printf '%s  %s\n' "$go_sha256" "$work/$go_tar" | sha256sum -c -
+    install -d /usr/local/lib/mccore-build-go
+    tar --strip-components=1 -xzf "$work/$go_tar" -C /usr/local/lib/mccore-build-go
+    ln -sf /usr/local/lib/mccore-build-go/bin/go /usr/local/bin/go
+  }
+  run_step "Installing Go toolchain" -- install_go
+else
+  ui_note "Go toolchain already present, skipping"
 fi
 
-printf 'Building mcCore from source...\n'
-bash scripts/build-release.sh
+BUILD_LOG=$log bash scripts/build-release.sh
 
 version=$(node -p 'require("./package.json").version')
 archive="release/mccore-${version}-linux-${go_arch}.tar.gz"
 [[ -f $archive ]] || fail "Build did not produce the expected release archive ($archive)."
 sha=$(cut -d' ' -f1 "${archive}.sha256")
 
-printf 'Installing mcCore...\n'
 exec bash installer/install.sh --archive "$archive" --sha256 "$sha" "$@"

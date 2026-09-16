@@ -127,6 +127,12 @@ activate_release() {
 run_step "Activating release" -- activate_release
 
 config=/etc/mccore/mccore.env
+# Runs provision.mjs via tsx, not plain node, for the same reason
+# mccore-control.service does (see that unit's ExecStart comment):
+# provision.mjs's enroll/bootstrap actions import packages/database/dist,
+# whose generated Prisma client uses extensionless relative imports that
+# plain Node's strict ESM resolver rejects at runtime.
+provision() { /opt/mccore/node/bin/node "$release_dir/node_modules/tsx/dist/cli.mjs" "$release_dir/installer/provision.mjs" "$config" "$1"; }
 if [[ ! -f $config ]]; then
   write_config() {
     if [[ -z $public_url ]]; then public_url="http://$(hostname -I | awk '{print $1}'):1703"; fi
@@ -162,7 +168,7 @@ SQL
   run_step "Setting up PostgreSQL" -- setup_postgres
 
   # Read env data without evaluating shell code.
-  run_migrations() { /opt/mccore/node/bin/node "$release_dir/installer/provision.mjs" "$config" migrate; }
+  run_migrations() { provision migrate; }
   run_step "Running database migrations" -- run_migrations
 fi
 
@@ -185,7 +191,7 @@ if [[ $mode != node ]]; then
 fi
 
 if [[ $mode == standard ]]; then
-  enroll_local_node() { /opt/mccore/node/bin/node "$release_dir/installer/provision.mjs" "$config" enroll; }
+  enroll_local_node() { provision enroll; }
   run_step "Enrolling local node" -- enroll_local_node
 fi
 
@@ -204,7 +210,7 @@ printf 'Configuration: %s\n' "$config"
 if [[ $mode != node ]]; then
   # Not wrapped in run_step: this prints the bootstrap code itself, which
   # must stay on the terminal and never be redirected into a log file.
-  /opt/mccore/node/bin/node "$release_dir/installer/provision.mjs" "$config" bootstrap
+  provision bootstrap
   printf 'Expose ports 80/443 through your HTTPS reverse proxy and allocate Minecraft ports as needed.\n'
   printf 'For an HTTP-only installation, restrict port 1703 to your trusted network. Production requires HTTPS.\n'
 fi

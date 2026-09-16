@@ -32,7 +32,7 @@ export DEBIAN_FRONTEND=noninteractive
 log=/tmp/mccore-bootstrap-$$.log
 printf 'Installing build prerequisites (log: %s)...\n' "$log"
 apt-get update >>"$log" 2>&1
-apt-get install -y ca-certificates curl git build-essential >>"$log" 2>&1
+apt-get install -y ca-certificates curl git build-essential python3 >>"$log" 2>&1
 
 # --- Architecture: Node.js and Go each use their own naming convention
 # for the same two architectures (Node: x64/arm64, Go: amd64/arm64) — both
@@ -75,8 +75,22 @@ if ! command -v go >/dev/null 2>&1; then
   go_version=$(curl --proto '=https' --fail --show-error --location https://go.dev/VERSION?m=text | head -1)
   go_tar="${go_version}.linux-${go_arch}.tar.gz"
   curl --proto '=https' --fail --show-error --location "https://go.dev/dl/${go_tar}" -o "$work/$go_tar"
-  curl --proto '=https' --fail --show-error --location "https://go.dev/dl/${go_tar}.sha256" -o "$work/$go_tar.sha256"
-  printf '%s  %s\n' "$(cat "$work/$go_tar.sha256")" "$work/$go_tar" | sha256sum -c - >>"$log"
+  # go.dev doesn't serve a plain "<file>.sha256" sidecar (that returns an
+  # HTML redirect page, not a checksum) — the official source of checksums
+  # is the JSON release index. Verified live while building this installer.
+  curl --proto '=https' --fail --show-error --location "https://go.dev/dl/?mode=json&include=all" -o "$work/go-releases.json"
+  go_sha256=$(python3 -c "
+import json, sys
+with open('$work/go-releases.json') as fh:
+    releases = json.load(fh)
+for release in releases:
+    for f in release.get('files', []):
+        if f.get('filename') == '$go_tar':
+            print(f['sha256'])
+            sys.exit(0)
+sys.exit(1)
+") || fail "Could not find an official checksum for $go_tar in the Go release index."
+  printf '%s  %s\n' "$go_sha256" "$work/$go_tar" | sha256sum -c - >>"$log"
   install -d /usr/local/lib/mccore-build-go
   tar --strip-components=1 -xzf "$work/$go_tar" -C /usr/local/lib/mccore-build-go
   ln -sf /usr/local/lib/mccore-build-go/bin/go /usr/local/bin/go

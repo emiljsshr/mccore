@@ -16,9 +16,12 @@ trap 'rm -rf -- "$stage"' EXIT
 mkdir -p "$stage/bin" "$stage/apps/control-plane" "$stage/packages" "$stage/web"
 (cd services/agent && CGO_ENABLED=0 go build -trimpath -o "$stage/bin/mcagent" ./cmd/mcagent && CGO_ENABLED=0 go build -trimpath -o "$stage/bin/mccore" ./cmd/mccore)
 cp -a apps/control-plane/dist apps/control-plane/package.json "$stage/apps/control-plane/"
-mkdir -p "$stage/packages/contracts" "$stage/packages/database"
+mkdir -p "$stage/packages/contracts" "$stage/packages/database/src"
 cp -a packages/contracts/dist packages/contracts/package.json "$stage/packages/contracts/"
 cp -a packages/database/dist packages/database/package.json packages/database/prisma packages/database/prisma.config.ts "$stage/packages/database/"
+# prisma/seed.ts imports the generated client from ../src/generated/prisma
+# (a source-tree path, not dist/) so it can run standalone via tsx.
+cp -a packages/database/src/generated "$stage/packages/database/src/"
 cp -a node_modules "$stage/"
 cp -a .next/standalone/. "$stage/web/"
 mkdir -p "$stage/web/.next"

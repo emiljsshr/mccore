@@ -34,13 +34,18 @@ printf 'Installing build prerequisites (log: %s)...\n' "$log"
 apt-get update >>"$log" 2>&1
 apt-get install -y ca-certificates curl git build-essential >>"$log" 2>&1
 
-# --- Node.js (build-time toolchain; separate from the runtime copy the
-# installer itself places under /opt/mccore/node) -------------------------
+# --- Architecture: Node.js and Go each use their own naming convention
+# for the same two architectures (Node: x64/arm64, Go: amd64/arm64) — both
+# are derived here, once, so nothing downstream has to remember to
+# translate between them.
 case "$(uname -m)" in
-  x86_64) node_arch=x64 ;;
-  aarch64) node_arch=arm64 ;;
+  x86_64) node_arch=x64; go_arch=amd64 ;;
+  aarch64) node_arch=arm64; go_arch=arm64 ;;
   *) fail "Unsupported architecture: $(uname -m). mcCore supports amd64 and arm64." ;;
 esac
+
+# --- Node.js (build-time toolchain; separate from the runtime copy the
+# installer itself places under /opt/mccore/node) -------------------------
 need_node=1
 if command -v node >/dev/null 2>&1; then
   current_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
@@ -63,7 +68,6 @@ if [[ $need_node == 1 ]]; then
 fi
 
 # --- Go (only needed to compile the Agent/CLI binaries) -------------------
-go_arch=$node_arch
 if ! command -v go >/dev/null 2>&1; then
   printf 'Installing Go (build toolchain)...\n'
   work=${work:-$(mktemp -d)}
@@ -82,7 +86,7 @@ printf 'Building mcCore from source...\n'
 bash scripts/build-release.sh
 
 version=$(node -p 'require("./package.json").version')
-archive="release/mccore-${version}-linux-${node_arch/x64/amd64}.tar.gz"
+archive="release/mccore-${version}-linux-${go_arch}.tar.gz"
 [[ -f $archive ]] || fail "Build did not produce the expected release archive ($archive)."
 sha=$(cut -d' ' -f1 "${archive}.sha256")
 

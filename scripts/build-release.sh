@@ -5,7 +5,11 @@ case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) echo 'Unsu
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 npm ci
-npm run generate --workspace packages/database
+# prisma.config.ts requires DATABASE_URL to be resolvable just to load (even
+# for `generate`, which only reads the schema and never opens a connection).
+# A fresh checkout has no .env yet, so supply a placeholder if the build
+# environment doesn't already have a real one.
+DATABASE_URL="${DATABASE_URL:-postgresql://build:build@127.0.0.1:5432/build}" npm run generate --workspace packages/database
 npm run build:all
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT

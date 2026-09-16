@@ -110,7 +110,7 @@ release_dir="/opt/mccore/releases/${archive_sha,,}"
 install -d /opt/mccore/releases
 if [[ ! -d $release_dir ]]; then mv "$work/release" "$release_dir"; fi
 if [[ -L /opt/mccore/current && $(readlink -f /opt/mccore/current) != "$release_dir" ]]; then
-  fail 'A different release is already installed. Back up the database and use a reviewed migration procedure; this installer only supports fresh installation or retrying the same release.'
+  fail "A different release ($(readlink -f /opt/mccore/current)) is already installed. This installer only supports fresh installation or retrying the same release. If mcCore is already running in production, back up the database and use a reviewed migration procedure instead of re-running this installer. If this is a first-time install that never finished (no bootstrap code was ever printed), it's safe to re-point it at the new build: rm -f /opt/mccore/current && sudo ./install.sh"
 fi
 activate_release() {
   ln -sfn "$release_dir" /opt/mccore/current

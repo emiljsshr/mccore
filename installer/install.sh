@@ -82,7 +82,7 @@ ln -sfn /opt/mccore/current/bin /opt/mccore/bin
 ln -sfn /opt/mccore/bin/mccore /usr/local/bin/mccore
 config=/etc/mccore/mccore.env
 if [[ ! -f $config ]]; then
-  if [[ -z $public_url ]]; then public_url="http://$(hostname -I | awk '{print $1}'):3000"; fi
+  if [[ -z $public_url ]]; then public_url="http://$(hostname -I | awk '{print $1}'):1703"; fi
   [[ $public_url =~ ^https?://[A-Za-z0-9.:-]+$ ]] || fail 'Public URL must be an HTTP(S) origin, without a path.'
   db_password=$(openssl rand -hex 32)
   session_secret=$(openssl rand -hex 32)
@@ -129,5 +129,5 @@ printf 'mcCore services installed. Configuration: %s\n' "$config"
 if [[ $mode != node ]]; then
   /opt/mccore/node/bin/node "$release_dir/installer/provision.mjs" "$config" bootstrap
   printf 'Expose ports 80/443 through your HTTPS reverse proxy and allocate Minecraft ports as needed.\n'
-  printf 'For an HTTP-only installation, restrict port 3000 to your trusted network. Production requires HTTPS.\n'
+  printf 'For an HTTP-only installation, restrict port 1703 to your trusted network. Production requires HTTPS.\n'
 fi

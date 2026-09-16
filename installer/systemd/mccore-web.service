@@ -13,7 +13,7 @@ Group=mccore
 WorkingDirectory=/opt/mccore/current/web
 EnvironmentFile=/etc/mccore/mccore.env
 Environment=NODE_ENV=production
-Environment=PORT=3000
+Environment=PORT=1703
 ExecStart=/opt/mccore/node/bin/node /opt/mccore/current/web/server.js
 Restart=on-failure
 RestartSec=2

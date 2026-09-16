@@ -18,7 +18,7 @@ This installs the build toolchain it needs (Node.js, Go), builds a release
 from the checkout you just cloned, and installs mcCore — PostgreSQL,
 systemd services, the local node, and a one-time setup code printed at the
 end. Pass `--public-url https://your-domain` if you have a domain pointed
-at the server; without one it prints `http://SERVER-IP:3000` and a clear
+at the server; without one it prints `http://SERVER-IP:1703` and a clear
 warning that production needs HTTPS in front of it (§53 — see
 `docs/architecture.md`).
 
@@ -80,7 +80,7 @@ sudo bash installer/install.sh --archive /path/to/release.tar.gz --sha256 TRUSTE
 
 The installer creates the service user, PostgreSQL database, application directories and systemd services, applies migrations, enrolls the local node and prints the bootstrap code. It supports standard, control-only and node-only modes. Review installer/install.sh for their arguments.
 
-HTTPS termination must be configured separately. Route /api/v1/* and /ws/* to the control plane on loopback port 4000, and other requests to the web service on port 3000. Keep database and agent health ports private.
+HTTPS termination must be configured separately. Route /api/v1/* and /ws/* to the control plane on loopback port 4000, and other requests to the web service on port 1703. Keep database and agent health ports private.
 
 The installer supports a fresh installation or retrying the same release. It deliberately rejects replacing an existing installation with a different release until the migration/rollback workflow has been completed and tested.
 

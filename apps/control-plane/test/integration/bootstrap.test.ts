@@ -81,7 +81,7 @@ describe("bootstrap / first-run setup (§8, §9)", () => {
       url: "/api/v1/setup/complete",
       payload: {
         code: "MCCORE-ONE-TIME-CODE",
-        name: "Jane Doe",
+        name: "First Admin",
         email: "first@example.com",
         password: "correct horse battery staple",
       },

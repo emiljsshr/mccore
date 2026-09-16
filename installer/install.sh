@@ -82,6 +82,12 @@ with tarfile.open(sys.argv[1]) as archive:
 PY
   mkdir "$work/release"
   tar --no-same-owner -xzf "$work/release.tar.gz" -C "$work/release"
+  # All services run as the unprivileged mccore user (Group=mccore), while
+  # this extracts as root; the archive's stored permissions depend on the
+  # build host's umask, which isn't guaranteed to leave things
+  # group/other-readable. Force it so mccore can always traverse and read
+  # its own release, regardless of how it was built.
+  chmod -R go+rX "$work/release"
   [[ -x $work/release/bin/mccore && -x $work/release/bin/mcagent ]] || { printf 'Release does not contain the %s binaries.\n' "$arch" >&2; return 1; }
 }
 run_step "Extracting release archive" -- extract_release
@@ -102,6 +108,7 @@ if [[ $mode != node ]]; then
     (cd "$work" && awk -v f="$node_tar" '$2==f' node-shasums | sha256sum -c -)
     install -d /opt/mccore/node
     tar --strip-components=1 -xJf "$work/$node_tar" -C /opt/mccore/node
+    chmod -R go+rX /opt/mccore/node
   }
   run_step "Installing Node.js runtime" -- install_node_runtime
 fi

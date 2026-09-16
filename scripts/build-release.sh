@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Staged files are later extracted as root on the install target and read by
+# the unprivileged mccore service user; a restrictive ambient umask here
+# (e.g. under `sudo` on some systems) would silently bake unreadable
+# permissions into the archive. installer/install.sh also defends against
+# this on the extraction side, but fixing it at the source avoids relying on
+# that alone for archives built here.
+umask 022
 [[ $(uname -s) == Linux ]] || { echo 'Build releases on Linux so native Node dependencies match the target host.' >&2; exit 1; }
 case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) echo 'Unsupported architecture' >&2; exit 1 ;; esac
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)

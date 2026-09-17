@@ -23,6 +23,9 @@ type ServerInstallPayload struct {
 	PVP              bool   `json:"pvp"`
 	CommandBlocks    bool   `json:"commandBlocks"`
 	MOTD             string `json:"motd,omitempty"`
+	// A 64x64 PNG, base64-encoded — resized client-side before it ever
+	// reaches here; this Agent just writes the bytes it's given.
+	ServerIconBase64 string `json:"serverIconBase64,omitempty"`
 	EulaAccepted     bool   `json:"eulaAccepted"`
 	AutoStart        bool   `json:"autoStart"`
 }

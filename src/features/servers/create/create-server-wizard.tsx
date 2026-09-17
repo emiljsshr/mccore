@@ -98,6 +98,7 @@ export function CreateServerWizard() {
         pvp: state.pvp,
         commandBlocks: state.commandBlocks,
         motd: state.motd,
+        ...(state.serverIconBase64 ? { serverIconBase64: state.serverIconBase64 } : {}),
       },
       (index) => setInstallStep(index),
     );

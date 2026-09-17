@@ -21,6 +21,8 @@ export interface WizardState {
   pvp: boolean;
   commandBlocks: boolean;
   motd: string;
+  /** Base64 PNG (no data: prefix), already resized to 64x64 — empty if not set. */
+  serverIconBase64: string;
 }
 
 export const DEFAULT_WIZARD_STATE: WizardState = {
@@ -43,4 +45,5 @@ export const DEFAULT_WIZARD_STATE: WizardState = {
   pvp: true,
   commandBlocks: false,
   motd: "",
+  serverIconBase64: "",
 };

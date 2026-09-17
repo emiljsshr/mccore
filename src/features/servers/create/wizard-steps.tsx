@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SoftwareIcon } from "@/components/shared/software-icon";
 import { IconPicker } from "@/components/shared/icon-picker";
 import { MotdEditor } from "@/components/shared/motd-editor";
+import { ServerIconUpload } from "@/components/shared/server-icon-upload";
 import { ServerBlockIcon } from "@/components/shared/server-block-icon";
 import { cn } from "@/lib/utils";
 import { SERVER_SOFTWARE_LABEL } from "@/types";
@@ -51,8 +52,12 @@ export function StepBasics({ state, update }: StepProps) {
         />
       </div>
       <div className="space-y-1.5">
-        <Label>Icon</Label>
+        <Label>Dashboard Icon</Label>
         <IconPicker value={state.icon} onChange={(icon) => update({ icon })} previewSeed={state.name || "new-server"} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Minecraft Server Icon</Label>
+        <ServerIconUpload value={state.serverIconBase64} onChange={(serverIconBase64) => update({ serverIconBase64 })} />
       </div>
     </div>
   );

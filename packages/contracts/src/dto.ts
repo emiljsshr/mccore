@@ -109,6 +109,22 @@ export const CreateServerInputSchema = z.object({
     .refine((v) => !/\r/.test(v), "MOTD must not contain carriage returns.")
     .refine((v) => v.split("\n").length <= 2, "MOTD supports at most 2 lines.")
     .optional(),
+  // The multiplayer server-list icon (server-icon.png) — resized to
+  // exactly 64x64 client-side before it's ever sent here. Re-checked
+  // server-side (PNG magic bytes), since a client is exactly the kind of
+  // boundary this repo's own conventions say not to trust blindly.
+  serverIconBase64: z
+    .string()
+    .max(300_000, "Server icon is too large.")
+    .refine((v) => {
+      const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      try {
+        return Buffer.from(v, "base64").subarray(0, 8).equals(PNG_SIGNATURE);
+      } catch {
+        return false;
+      }
+    }, "Server icon must be a valid PNG image.")
+    .optional(),
   eulaAccepted: z.literal(true, { message: "You must accept the Minecraft EULA to create a server." }),
 });
 export type CreateServerInput = z.infer<typeof CreateServerInputSchema>;

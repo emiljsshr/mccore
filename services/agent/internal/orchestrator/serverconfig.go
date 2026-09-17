@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,6 +76,24 @@ func writeServerProperties(serverDir string, p protocol.ServerInstallPayload) er
 	}
 
 	return os.WriteFile(path, []byte(serializeProperties(existing)), 0644)
+}
+
+// writeServerIcon decodes and writes the Minecraft multiplayer-list icon
+// (server-icon.png — Minecraft looks for exactly that filename in the
+// server's own working directory; it must be a 64x64 PNG, which the
+// uploader resizes client-side before this ever runs). A no-op when no
+// icon was provided, so install/configure calls that don't touch the icon
+// leave an existing one alone — same "only managed fields get
+// overwritten" rule as writeServerProperties.
+func writeServerIcon(serverDir, iconBase64 string) error {
+	if iconBase64 == "" {
+		return nil
+	}
+	data, err := base64.StdEncoding.DecodeString(iconBase64)
+	if err != nil {
+		return fmt.Errorf("decoding server icon: %w", err)
+	}
+	return os.WriteFile(filepath.Join(serverDir, "server-icon.png"), data, 0644)
 }
 
 func parseProperties(content string) map[string]string {

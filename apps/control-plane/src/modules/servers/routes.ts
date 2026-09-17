@@ -83,13 +83,16 @@ export default async function serversRoutes(app: FastifyInstance) {
     assertServerAccessible(request, id);
     const server = await requireServer(app, id);
     if (server.status !== "OFFLINE") throw new ApiError(ErrorCode.CONFLICT, "Stop the server before changing its configuration.");
-    const schema = CreateServerInputSchema.pick({ name: true, description: true, icon: true, maxPlayers: true, gameMode: true, difficulty: true, onlineMode: true, whitelist: true, pvp: true, commandBlocks: true, memoryMaxMb: true, cpuLimitPercent: true, motd: true });
-    const input = schema.parse(request.body);
+    const schema = CreateServerInputSchema.pick({ name: true, description: true, icon: true, maxPlayers: true, gameMode: true, difficulty: true, onlineMode: true, whitelist: true, pvp: true, commandBlocks: true, memoryMaxMb: true, cpuLimitPercent: true, motd: true, serverIconBase64: true });
+    const { serverIconBase64, ...input } = schema.parse(request.body);
     if (input.memoryMaxMb < server.memoryMinMb) throw new ApiError(ErrorCode.VALIDATION_ERROR, "Maximum memory must be at least the server minimum.");
     const lockId = ulid();
     if (!await tryAcquireServerLock(app.prisma, id, lockId)) throw new ApiError(ErrorCode.SERVER_BUSY, "Another operation is running.");
     try {
-      const ack = await app.agentHub.sendCommand(server.nodeId, { commandId: ulid(), type: "server.configure", issuedAt: new Date().toISOString(), payload: { serverId: id, software: server.software.toLowerCase() as import("@mccore/contracts").MinecraftSoftwareDto, minecraftVersion: server.minecraftVersion, javaSelector: server.javaVersion, memoryMinMb: server.memoryMinMb, diskLimitMb: server.diskLimitMb, port: server.port, ...input } });
+      // serverIconBase64 is a file the Agent writes to disk (server-icon.png)
+      // — not a database column, so it goes to the Agent but is deliberately
+      // excluded from the `...input` spread into the Prisma update below.
+      const ack = await app.agentHub.sendCommand(server.nodeId, { commandId: ulid(), type: "server.configure", issuedAt: new Date().toISOString(), payload: { serverId: id, software: server.software.toLowerCase() as import("@mccore/contracts").MinecraftSoftwareDto, minecraftVersion: server.minecraftVersion, javaSelector: server.javaVersion, memoryMinMb: server.memoryMinMb, diskLimitMb: server.diskLimitMb, port: server.port, ...input, serverIconBase64 } });
       if (!ack.ok) throw new ApiError(ErrorCode.CONFLICT, ack.errorMessage ?? "Node rejected configuration.");
       const updated = await app.prisma.minecraftServer.update({ where: { id }, data: { ...input, gameMode: input.gameMode.toUpperCase() as typeof server.gameMode, difficulty: input.difficulty.toUpperCase() as typeof server.difficulty } });
       await recordAudit(app.prisma, { actorUserId: request.user!.id, action: "server.configured", description: "Updated server configuration.", serverId: id, ipAddress: request.ip });
@@ -195,6 +198,7 @@ export default async function serversRoutes(app: FastifyInstance) {
           pvp: input.pvp,
           commandBlocks: input.commandBlocks,
           motd: input.motd,
+          serverIconBase64: input.serverIconBase64,
           eulaAccepted: true,
           autoStart: false,
         },

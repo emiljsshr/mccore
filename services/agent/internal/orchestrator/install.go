@@ -96,6 +96,10 @@ func (o *Orchestrator) handleInstall(ctx context.Context, cmd protocol.Command) 
 			return fmt.Errorf("writing server.properties: %w", err)
 		}
 	}
+	if err := writeServerIcon(serverDir, p.ServerIconBase64); err != nil {
+		emit("FAILED", 80, err.Error())
+		return fmt.Errorf("writing server-icon.png: %w", err)
+	}
 
 	if err := writeManifest(serverDir, manifest{
 		Software:        p.Software,

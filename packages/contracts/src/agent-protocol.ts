@@ -101,6 +101,7 @@ export const ServerInstallCommandSchema = CommandEnvelope(
     pvp: z.boolean(),
     commandBlocks: z.boolean(),
     motd: z.string().optional(),
+    serverIconBase64: z.string().optional(),
     eulaAccepted: z.literal(true),
     autoStart: z.boolean(),
   })

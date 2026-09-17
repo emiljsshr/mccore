@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconPicker } from "@/components/shared/icon-picker";
 import { MotdEditor } from "@/components/shared/motd-editor";
+import { ServerIconUpload } from "@/components/shared/server-icon-upload";
 import { deleteServer } from "@/services";
 import { Loader2 } from "@/lib/icons";
 
@@ -25,6 +26,7 @@ export function ServerSettingsView({ server }: { server: Server }) {
   const [icon, setIcon] = useState(server.icon);
   const [description, setDescription] = useState(server.description ?? "");
   const [motd, setMotd] = useState(server.motd ?? "");
+  const [newServerIcon, setNewServerIcon] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(server.players.max);
   const [gameMode, setGameMode] = useState(server.gameMode);
   const [difficulty, setDifficulty] = useState(server.difficulty);
@@ -40,7 +42,11 @@ export function ServerSettingsView({ server }: { server: Server }) {
   async function handleSave() {
     setSaving(true);
     try {
-      await api(`/servers/${server.id}`, mutation("PATCH", { name, icon, description, maxPlayers, gameMode, difficulty, onlineMode, whitelist, pvp, commandBlocks, motd, memoryMaxMb: memoryMaxGb * 1024, cpuLimitPercent: cpuLimit }));
+      await api(`/servers/${server.id}`, mutation("PATCH", {
+        name, icon, description, maxPlayers, gameMode, difficulty, onlineMode, whitelist, pvp, commandBlocks, motd,
+        memoryMaxMb: memoryMaxGb * 1024, cpuLimitPercent: cpuLimit,
+        ...(newServerIcon ? { serverIconBase64: newServerIcon } : {}),
+      }));
       await getServer(server.id); toast.success("Settings saved");
     } catch(e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
@@ -63,8 +69,12 @@ export function ServerSettingsView({ server }: { server: Server }) {
             <Input id="server-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Icon</Label>
+            <Label>Dashboard Icon</Label>
             <IconPicker value={icon} onChange={setIcon} previewSeed={server.id} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Minecraft Server Icon</Label>
+            <ServerIconUpload value={newServerIcon} onChange={setNewServerIcon} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="server-description">Description</Label>

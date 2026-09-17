@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,5 +57,43 @@ func TestConfigureUpdatesMOTDWhenProvided(t *testing.T) {
 	}
 	if strings.Contains(content, "Old MOTD") {
 		t.Errorf("server.properties = %q, want the old MOTD replaced", content)
+	}
+}
+
+func TestWriteServerIcon(t *testing.T) {
+	dir := t.TempDir()
+	// Not a real PNG — writeServerIcon just writes the decoded bytes as
+	// given, the same way the rest of this file trusts callers to have
+	// already produced a valid server.properties value; the client-side
+	// uploader is what guarantees a real 64x64 PNG.
+	raw := []byte("fake-png-bytes")
+	encoded := base64.StdEncoding.EncodeToString(raw)
+
+	if err := writeServerIcon(dir, encoded); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "server-icon.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(raw) {
+		t.Errorf("server-icon.png = %q, want %q", got, raw)
+	}
+}
+
+func TestWriteServerIconNoOpWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeServerIcon(dir, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "server-icon.png")); !os.IsNotExist(err) {
+		t.Errorf("expected no server-icon.png to be written, stat error = %v", err)
+	}
+}
+
+func TestWriteServerIconRejectsInvalidBase64(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeServerIcon(dir, "not-valid-base64!!!"); err == nil {
+		t.Fatal("expected an error for invalid base64, got nil")
 	}
 }

@@ -29,5 +29,8 @@ func (o *Orchestrator) handleConfigure(cmd protocol.Command) error {
 			return err
 		}
 	}
+	if err := writeServerIcon(dir, p.ServerIconBase64); err != nil {
+		return err
+	}
 	return writeManifest(dir, current)
 }

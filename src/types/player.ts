@@ -26,6 +26,14 @@ export interface PlayerInventory {
   main: (InventoryItem | undefined)[];
 }
 
+export interface PlayerAchievement {
+  key: string;
+  title: string;
+  description: string;
+  serverId: string;
+  earnedAt: string;
+}
+
 export interface Player {
   id: string;
   uuid: string;
@@ -45,4 +53,5 @@ export interface Player {
   whitelisted: boolean;
   operator: boolean;
   inventory?: PlayerInventory;
+  achievements: PlayerAchievement[];
 }

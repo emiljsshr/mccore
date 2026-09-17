@@ -212,6 +212,15 @@ export const InventoryItemSchema = z.object({
   enchanted: z.boolean().optional(),
 });
 
+export const PlayerAchievementDtoSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  description: z.string(),
+  serverId: z.string(),
+  earnedAt: z.string(),
+});
+export type PlayerAchievementDto = z.infer<typeof PlayerAchievementDtoSchema>;
+
 export const PlayerDtoSchema = z.object({
   id: z.string(),
   uuid: z.string(),
@@ -241,6 +250,7 @@ export const PlayerDtoSchema = z.object({
       main: z.array(InventoryItemSchema.optional()),
     })
     .optional(),
+  achievements: z.array(PlayerAchievementDtoSchema),
 });
 export type PlayerDto = z.infer<typeof PlayerDtoSchema>;
 

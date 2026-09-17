@@ -53,6 +53,12 @@ build_agent_binaries() {
 mkdir -p "$stage/bin" "$stage/apps/control-plane" "$stage/packages" "$stage/web"
 run_step "Building node agent binaries" -- build_agent_binaries
 
+build_bridge_plugin() {
+  (cd services/bridge-plugin && ./gradlew --console=plain jar)
+  cp services/bridge-plugin/build/libs/mccore-bridge-*.jar "$stage/bin/mccore-bridge.jar"
+}
+run_step "Building mcCore Bridge plugin" -- build_bridge_plugin
+
 package_archive() {
   cp -a apps/control-plane/dist apps/control-plane/package.json apps/control-plane/tsconfig.json "$stage/apps/control-plane/"
   # mccore-control.service runs src/server.ts via tsx, not dist/server.js

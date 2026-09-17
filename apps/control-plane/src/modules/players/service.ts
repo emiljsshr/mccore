@@ -1,4 +1,4 @@
-import type { Player, PlayerBan } from "@mccore/database";
+import type { Player, PlayerAchievement, PlayerBan } from "@mccore/database";
 import type { PlayerDto } from "@mccore/contracts";
 import { ApiError, ErrorCode } from "@mccore/contracts";
 
@@ -31,20 +31,23 @@ export interface PlayerDtoContext {
   bannedBy?: string;
   whitelisted: boolean;
   operator: boolean;
+  /** Omitted (defaults to []) by callers that list many players at once — fetched for the single-player detail route. */
+  achievements?: PlayerAchievement[];
 }
 
 /**
  * Maps a `Player` row to the wire DTO.
  *
- * `inventory` is intentionally left `undefined` — reading live inventory
- * contents requires the not-yet-built "mcCore Bridge" plugin integration
- * (see docs/architecture.md), which this module doesn't depend on.
+ * `inventory` is intentionally left `undefined` here — it's a live snapshot
+ * requested on demand via the mcCore Bridge plugin (services/bridge-plugin,
+ * see modules/players/invsee.ts), not something read from the database, so
+ * it doesn't belong in a plain row-to-DTO mapper.
  *
  * `gameMode` has no backing column on `Player` or `PlayerSession` (it's
  * per-life client state, not something the control plane persists) and the
  * DTO field is non-optional, so this defaults to `"survival"` as a
- * placeholder until the mcCore Bridge can report the player's live game
- * mode. Judgment call — flagged in the module's implementation report.
+ * placeholder until an inventory snapshot (which does report it) has been
+ * taken. Judgment call — flagged in the module's implementation report.
  */
 export function toPlayerDto(player: Player, ctx: PlayerDtoContext): PlayerDto {
   return {
@@ -63,6 +66,13 @@ export function toPlayerDto(player: Player, ctx: PlayerDtoContext): PlayerDto {
     bannedBy: ctx.bannedBy,
     whitelisted: ctx.whitelisted,
     operator: ctx.operator,
+    achievements: (ctx.achievements ?? []).map((a) => ({
+      key: a.key,
+      title: a.title,
+      description: a.description,
+      serverId: a.serverId,
+      earnedAt: a.earnedAt.toISOString(),
+    })),
     // inventory intentionally omitted — see doc comment above.
   };
 }

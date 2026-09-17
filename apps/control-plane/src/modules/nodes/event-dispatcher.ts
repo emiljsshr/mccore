@@ -43,6 +43,22 @@ const ServerMetricsPayload = z.object({
 
 const PlayerEventPayload = z.object({ serverId: z.string(), uuid: z.string(), username: z.string() });
 
+const PlayerAchievementPayload = z.object({
+  serverId: z.string(),
+  uuid: z.string(),
+  player: z.string(),
+  key: z.string(),
+  title: z.string(),
+  description: z.string(),
+});
+
+// Passed through close to verbatim from the Bridge plugin's own JSON (see
+// Wire.java) rather than a strict schema — its exact shape depends on
+// whether the target player was online, and it's resolved into a pending
+// HTTP request (modules/players/invsee.ts), never persisted or broadcast,
+// so there's no wire contract with the browser to validate against here.
+const PlayerInventorySnapshotPayload = z.object({ requestId: z.string() }).passthrough();
+
 const BackupProgressPayload = z.object({
   serverId: z.string(),
   backupId: z.string(),
@@ -94,6 +110,10 @@ export async function dispatchAgentEvent(app: FastifyInstance, frame: { kind: "e
         return await onPlayerJoin(app, PlayerEventPayload.parse(frame.payload));
       case "player.leave":
         return await onPlayerLeave(app, PlayerEventPayload.parse(frame.payload));
+      case "player.achievement":
+        return await onPlayerAchievement(app, PlayerAchievementPayload.parse(frame.payload));
+      case "player.inventory.snapshot":
+        return onPlayerInventorySnapshot(app, PlayerInventorySnapshotPayload.parse(frame.payload));
       case "backup.progress":
         return await onBackupProgress(app, BackupProgressPayload.parse(frame.payload));
       case "backup.restore.progress":
@@ -250,6 +270,40 @@ async function onPlayerLeave(app: FastifyInstance, payload: z.infer<typeof Playe
     .update({ where: { id: payload.serverId }, data: { onlinePlayers: { decrement: 1 } } })
     .catch(() => undefined);
   app.liveHub.broadcast(`server:${payload.serverId}`, "player.leave", payload.serverId, { uuid: payload.uuid, username: payload.username });
+}
+
+async function onPlayerAchievement(app: FastifyInstance, payload: z.infer<typeof PlayerAchievementPayload>) {
+  const player = await app.prisma.player.upsert({
+    where: { uuid: payload.uuid },
+    update: { username: payload.player, lastSeenAt: new Date() },
+    create: { id: ulid(), uuid: payload.uuid, username: payload.player, avatarSeed: payload.uuid },
+  });
+  // Idempotent: a reconnecting Agent could, in principle, replay a console
+  // line — advancements are earned at most once per player per server, so
+  // upserting on that same uniqueness is correct, not just convenient.
+  await app.prisma.playerAchievement.upsert({
+    where: { playerId_serverId_key: { playerId: player.id, serverId: payload.serverId, key: payload.key } },
+    update: {},
+    create: {
+      id: ulid(),
+      playerId: player.id,
+      serverId: payload.serverId,
+      key: payload.key,
+      title: payload.title,
+      description: payload.description,
+    },
+  });
+  app.liveHub.broadcast(`server:${payload.serverId}`, "player.achievement", payload.serverId, {
+    uuid: payload.uuid,
+    username: payload.player,
+    key: payload.key,
+    title: payload.title,
+    description: payload.description,
+  });
+}
+
+function onPlayerInventorySnapshot(app: FastifyInstance, payload: z.infer<typeof PlayerInventorySnapshotPayload>) {
+  app.invsee.resolve(payload.requestId, payload);
 }
 
 async function onBackupProgress(app: FastifyInstance, payload: z.infer<typeof BackupProgressPayload>) {

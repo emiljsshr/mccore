@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cometa-mccore/mccore/services/agent/internal/bridge"
 	"github.com/cometa-mccore/mccore/services/agent/internal/cgroup"
 	"github.com/cometa-mccore/mccore/services/agent/internal/config"
 	"github.com/cometa-mccore/mccore/services/agent/internal/identity"
@@ -93,10 +94,9 @@ func run(cfg config.Config, logger *slog.Logger) error {
 			if err := client.SendEvent("server.console", protocol.ServerConsoleEvent{ServerID: serverID, Lines: lines}); err != nil {
 				logger.Warn("failed to send console event", "error", err, "serverId", serverID)
 			}
-			// No RCON/query-protocol integration (§ mcCore Bridge, not yet
-			// built) — the server's own login log lines are the only
-			// source of truth this Agent has for who is currently
-			// connected. See internal/playertrack.
+			// No RCON/query-protocol integration — the server's own login
+			// log lines are the only source of truth this Agent has for
+			// who is currently connected. See internal/playertrack.
 			for _, line := range lines {
 				event := players.Observe(serverID, line.Message)
 				if event == nil {
@@ -109,6 +109,28 @@ func run(cfg config.Config, logger *slog.Logger) error {
 				payload := protocol.PlayerEvent{ServerID: serverID, UUID: event.UUID, Username: event.Username}
 				if err := client.SendEvent(eventType, payload); err != nil {
 					logger.Warn("failed to send player event", "error", err, "serverId", serverID, "type", eventType)
+				}
+			}
+			// The mcCore Bridge plugin (services/bridge-plugin) reports
+			// advancements and inventory snapshots the same way — as
+			// console output, since it deliberately opens no network port
+			// of its own. Forwarded close to verbatim; the control plane's
+			// zod schemas do the actual structural validation.
+			for _, line := range lines {
+				data, ok := bridge.Parse(line.Message)
+				if !ok {
+					continue
+				}
+				data["serverId"] = serverID
+				switch bridge.String(data, "type") {
+				case "achievement":
+					if err := client.SendEvent("player.achievement", data); err != nil {
+						logger.Warn("failed to send achievement event", "error", err, "serverId", serverID)
+					}
+				case "inventory":
+					if err := client.SendEvent("player.inventory.snapshot", data); err != nil {
+						logger.Warn("failed to send inventory snapshot event", "error", err, "serverId", serverID)
+					}
 				}
 			}
 		},

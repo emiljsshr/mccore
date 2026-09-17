@@ -1,4 +1,4 @@
-import type { Player } from "@/types";
+import type { Player, PlayerInventory } from "@/types";
 import { api, mutation } from "@/lib/api";
 import { usePlayerStore } from "@/stores/use-player-store";
 export async function listPlayers(): Promise<Player[]> { const { players } = await api<{ players: Player[] }>("/players"); usePlayerStore.setState({ players }); return players; }
@@ -11,6 +11,12 @@ export const banPlayer = (id: string, reason: string, _bannedBy: string) => act(
 export const unbanPlayer = (id: string) => act(id, "pardon");
 export const toggleOperator = (id: string) => act(id, "op", { action: player(id).operator ? "deop" : "op" });
 export const toggleWhitelist = (id: string) => act(id, "whitelist", { action: player(id).whitelisted ? "remove" : "add" });
+/** Live snapshot via the mcCore Bridge plugin — not cached, since inventory contents change too fast to trust an old one. */
+export async function getPlayerInventory(id: string): Promise<PlayerInventory> {
+  const p = player(id);
+  const { inventory } = await api<{ inventory: PlayerInventory }>(`/servers/${p.serverId}/players/${p.uuid}/invsee`, mutation("POST"));
+  return inventory;
+}
 export async function setGameMode(id: string, gameMode: Player["gameMode"]) {
   const p = player(id);
   if (!/^[A-Za-z0-9_]{3,16}$/.test(p.username) || !["survival", "creative", "adventure", "spectator"].includes(gameMode)) throw new Error("Invalid game mode or username.");

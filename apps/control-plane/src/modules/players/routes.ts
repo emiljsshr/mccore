@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ApiError, ErrorCode, ulid, MinecraftUsernameSchema, MinecraftUuidSchema } from "@mccore/contracts";
-import type { MinecraftServer, OperatorEntry, Player, PlayerBan, PlayerSession, WhitelistEntry } from "@mccore/database";
+import type { MinecraftServer, OperatorEntry, Player, PlayerAchievement, PlayerBan, PlayerSession, WhitelistEntry } from "@mccore/database";
 import { recordAudit } from "../audit/service.js";
 import { assertNoNewlines, isBanActive, toPlayerDto } from "./service.js";
 
@@ -214,6 +214,10 @@ export default async function playersRoutes(app: FastifyInstance) {
       orderBy: { joinedAt: "desc" },
     });
     const currentBan = openSession ? activeBanByServer.get(openSession.serverId) : undefined;
+    const achievements: PlayerAchievement[] = await app.prisma.playerAchievement.findMany({
+      where: { playerId: player.id, ...scoped },
+      orderBy: { earnedAt: "desc" },
+    });
 
     return {
       player: toPlayerDto(player, {
@@ -224,8 +228,62 @@ export default async function playersRoutes(app: FastifyInstance) {
         bannedBy: currentBan?.bannedByUserId ?? undefined,
         whitelisted: openSession ? whitelistedServerIds.has(openSession.serverId) : false,
         operator: openSession ? operatorServerIds.has(openSession.serverId) : false,
+        achievements,
       }),
       serverStatuses,
+    };
+  });
+
+  // Live snapshot via the mcCore Bridge plugin — not persisted, and not the
+  // same request/response shape as everything else in this file (those all
+  // talk to Prisma; this one talks to a plugin running inside the
+  // Minecraft process itself, through a console command out and a console
+  // line back). See modules/players/invsee.ts for the correlation.
+  app.post("/api/v1/servers/:id/players/:uuid/invsee", { preHandler: app.requirePermission("players.view") }, async (request) => {
+    const { id, uuid } = request.params as { id: string; uuid: string };
+    assertServerAccessible(request, id);
+    const server = await requireServer(app, id);
+    const { username } = await requirePlayer(app, uuid);
+
+    if (server.status !== "ONLINE") throw new ApiError(ErrorCode.SERVER_NOT_RUNNING, "Server is not running.");
+    if (!app.agentHub.isConnected(server.nodeId)) throw new ApiError(ErrorCode.NODE_OFFLINE, "Node is not connected.");
+
+    const requestId = ulid();
+    const responsePromise = app.invsee.register(requestId);
+    const ack = await app.agentHub.sendCommand(server.nodeId, {
+      commandId: ulid(),
+      type: "console.command",
+      issuedAt: new Date().toISOString(),
+      payload: { serverId: id, command: `mccorebridge invsee ${requestId} ${username}` },
+    });
+    if (!ack.ok) throw new ApiError(ErrorCode.INTERNAL_ERROR, ack.errorMessage ?? "Could not reach the server.");
+
+    let snapshot: Record<string, unknown>;
+    try {
+      snapshot = await responsePromise;
+    } catch (err) {
+      throw new ApiError(ErrorCode.INTERNAL_ERROR, (err as Error).message);
+    }
+    if (typeof snapshot.error === "string") throw new ApiError(ErrorCode.VALIDATION_ERROR, snapshot.error);
+
+    const item = (raw: unknown, slot: number) => {
+      if (!raw || typeof raw !== "object") return undefined;
+      const r = raw as Record<string, unknown>;
+      if (typeof r.itemId !== "string" || typeof r.name !== "string" || typeof r.count !== "number") return undefined;
+      return { slot, itemId: r.itemId, name: r.name, count: r.count, enchanted: Boolean(r.enchanted) };
+    };
+    const items = (raw: unknown) => (Array.isArray(raw) ? raw : []).map((v, i) => item(v, i));
+
+    return {
+      inventory: {
+        helmet: item(snapshot.helmet, 0),
+        chestplate: item(snapshot.chestplate, 0),
+        leggings: item(snapshot.leggings, 0),
+        boots: item(snapshot.boots, 0),
+        offhand: item(snapshot.offhand, 0),
+        hotbar: items(snapshot.hotbar),
+        main: items(snapshot.main),
+      },
     };
   });
 

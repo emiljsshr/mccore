@@ -100,6 +100,10 @@ func (o *Orchestrator) handleInstall(ctx context.Context, cmd protocol.Command) 
 		emit("FAILED", 80, err.Error())
 		return fmt.Errorf("writing server-icon.png: %w", err)
 	}
+	if err := installBridgePlugin(p.Software, serverDir); err != nil {
+		emit("FAILED", 80, err.Error())
+		return fmt.Errorf("installing mcCore Bridge plugin: %w", err)
+	}
 
 	if err := writeManifest(serverDir, manifest{
 		Software:        p.Software,

@@ -18,7 +18,7 @@ import { BanPlayerDialog } from "@/features/players/ban-player-dialog";
 import { MessagePlayerDialog } from "@/features/players/message-player-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { formatDateTime, formatPlaytime, formatRelativeTime } from "@/lib/format";
-import type { GameMode, Player } from "@/types";
+import type { GameMode, Player, PlayerInventory } from "@/types";
 import {
   MessageSquare,
   Navigation,
@@ -27,8 +27,11 @@ import {
   ShieldCheck,
   ListPlus,
   Loader2,
+  Eye,
+  RefreshCw,
+  Trophy,
 } from "@/lib/icons";
-import { kickPlayer, setGameMode, toggleOperator, toggleWhitelist, unbanPlayer } from "@/services";
+import { kickPlayer, getPlayerInventory, setGameMode, toggleOperator, toggleWhitelist, unbanPlayer } from "@/services";
 import { Badge } from "@/components/ui/badge";
 
 const GAME_MODES: GameMode[] = ["survival", "creative", "adventure", "spectator"];
@@ -44,8 +47,30 @@ export function PlayerDetailDrawer({ player, onOpenChange }: PlayerDetailDrawerP
   const [confirmBan, setConfirmBan] = useState(false);
   const [confirmUnban, setConfirmUnban] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
+  const [inventory, setInventory] = useState<PlayerInventory | null>(null);
+  const [invseePending, setInvseePending] = useState(false);
+  const [inventoryFor, setInventoryFor] = useState<string | null>(null);
+
+  // Discard a previously-viewed player's inventory the moment the drawer
+  // switches to a different one — a stale snapshot shown under the wrong
+  // name would be actively misleading, not just outdated.
+  if (player && inventoryFor !== player.id) {
+    setInventory(null);
+    setInventoryFor(player.id);
+  }
 
   if (!player) return null;
+
+  async function handleInvsee() {
+    setInvseePending(true);
+    try {
+      setInventory(await getPlayerInventory(player!.id));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setInvseePending(false);
+    }
+  }
 
   async function run(action: string, fn: () => Promise<void>, message: string) {
     setPending(action);
@@ -207,14 +232,59 @@ export function PlayerDetailDrawer({ player, onOpenChange }: PlayerDetailDrawerP
               </Button>
             </div>
 
-            {player.inventory && (
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Inventory</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={!player.online || invseePending}
+                  onClick={handleInvsee}
+                >
+                  {invseePending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : inventory ? (
+                    <RefreshCw className="size-3.5" />
+                  ) : (
+                    <Eye className="size-3.5" />
+                  )}
+                  {inventory ? "Refresh" : "Invsee"}
+                </Button>
+              </div>
+              {inventory ? (
+                <InventoryGrid inventory={inventory} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {player.online
+                    ? "Click Invsee for a live look at their inventory."
+                    : "Only available while this player is online."}
+                </p>
+              )}
+            </div>
+
+            {player.achievements.length > 0 && (
               <>
                 <Separator />
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Inventory Preview
+                    Achievements ({player.achievements.length})
                   </p>
-                  <InventoryGrid inventory={player.inventory} />
+                  <div className="max-h-48 space-y-1.5 overflow-y-auto">
+                    {player.achievements.map((a) => (
+                      <div
+                        key={`${a.serverId}:${a.key}`}
+                        className="flex items-start gap-2 rounded-md border border-border bg-surface px-2.5 py-2"
+                      >
+                        <Trophy className="mt-0.5 size-3.5 shrink-0 text-status-warning" />
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-foreground">{a.title}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{a.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </>
             )}

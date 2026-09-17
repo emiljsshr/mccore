@@ -32,5 +32,8 @@ func (o *Orchestrator) handleConfigure(cmd protocol.Command) error {
 	if err := writeServerIcon(dir, p.ServerIconBase64); err != nil {
 		return err
 	}
+	if err := installBridgePlugin(p.Software, dir); err != nil {
+		return err
+	}
 	return writeManifest(dir, current)
 }

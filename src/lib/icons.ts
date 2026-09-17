@@ -83,6 +83,7 @@ export {
   IconStar as Star,
   IconStrikethrough as Strikethrough,
   IconSun as Sun,
+  IconTrophy as Trophy,
   IconTerminal2 as Terminal,
   IconUnderline as Underline,
   IconUpload as Upload,

@@ -338,6 +338,7 @@ model MinecraftServer {
   allocations        ServerAllocation[]
   environmentVars    ServerEnvironment[]
   playerSessions     PlayerSession[]
+  achievements       PlayerAchievement[]
   bans               PlayerBan[]
   whitelistEntries   WhitelistEntry[]
   operatorEntries    OperatorEntry[]
@@ -451,12 +452,33 @@ model Player {
   playtimeSeconds Int      @default(0)
   createdAt       DateTime @default(now())
 
-  sessions   PlayerSession[]
-  bans       PlayerBan[]
-  whitelists WhitelistEntry[]
-  operators  OperatorEntry[]
+  sessions     PlayerSession[]
+  bans         PlayerBan[]
+  whitelists   WhitelistEntry[]
+  operators    OperatorEntry[]
+  achievements PlayerAchievement[]
 
   @@index([username])
+}
+
+/** Reported by the mcCore Bridge plugin's advancement listener (§ mcCore
+ * Bridge) — only ever what doesAnnounceToChat() would have shown a real
+ * player, same as vanilla's own "X has made the advancement [Y]" console
+ * line, just structured instead of parsed out of chat text. */
+model PlayerAchievement {
+  id          String   @id @db.VarChar(26)
+  playerId    String   @db.VarChar(26)
+  serverId    String   @db.VarChar(26)
+  key         String
+  title       String
+  description String
+  earnedAt    DateTime @default(now())
+
+  player Player          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  server MinecraftServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, serverId, key])
+  @@index([playerId])
 }
 
 model PlayerSession {

@@ -46,6 +46,13 @@ export const ServerInstallProgressEventSchema = z.object({
 
 export const PlayerJoinEventSchema = z.object({ uuid: z.string(), username: z.string() });
 export const PlayerLeaveEventSchema = z.object({ uuid: z.string(), username: z.string() });
+export const PlayerAchievementEventSchema = z.object({
+  uuid: z.string(),
+  username: z.string(),
+  key: z.string(),
+  title: z.string(),
+  description: z.string(),
+});
 
 export const BackupProgressEventSchema = z.object({
   backupId: z.string(),
@@ -77,6 +84,7 @@ export const WS_EVENT_SCHEMAS = {
   "server.install.progress": ServerInstallProgressEventSchema,
   "player.join": PlayerJoinEventSchema,
   "player.leave": PlayerLeaveEventSchema,
+  "player.achievement": PlayerAchievementEventSchema,
   "backup.progress": BackupProgressEventSchema,
   "plugin.install.progress": PluginInstallProgressEventSchema,
   "operation.updated": OperationUpdatedEventSchema,

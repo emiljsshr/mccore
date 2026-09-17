@@ -51,6 +51,35 @@ esac
 ui_header "mcCore installer"
 ui_note "Full log: $log"
 
+# --- Swap: building this stack from source (Node/TypeScript, Go, and a
+# JVM/Gradle build for the mcCore Bridge plugin) can transiently need more
+# memory than a small VPS has — observed live: the kernel OOM-killed `npm
+# ci` on a 4GB host with zero swap configured. Only acts when swap is
+# genuinely thin on a small-RAM host; never touches an existing swap setup,
+# and checks free disk before writing the file so it can't fill the disk.
+ensure_swap() {
+  local mem_kb swap_kb avail_kb
+  mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+  swap_kb=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
+  if ((mem_kb > 6 * 1024 * 1024)) || ((swap_kb >= 2 * 1024 * 1024)); then
+    return 0
+  fi
+  avail_kb=$(df --output=avail -k / | tail -1)
+  if ((avail_kb < 10 * 1024 * 1024)); then
+    echo 'Also low on disk space, so skipping automatic swap setup (add swap manually if the build later runs out of memory).' >&2
+    return 0
+  fi
+  local swapfile=/swapfile
+  if [[ ! -f $swapfile ]]; then
+    fallocate -l 4G "$swapfile" 2>/dev/null || dd if=/dev/zero of="$swapfile" bs=1M count=4096 status=none
+    chmod 600 "$swapfile"
+    mkswap "$swapfile"
+  fi
+  swapon --show=NAME --noheadings | grep -qx "$swapfile" || swapon "$swapfile"
+  grep -q "^$swapfile " /etc/fstab || printf '%s none swap sw 0 0\n' "$swapfile" >>/etc/fstab
+}
+run_step "Ensuring adequate swap space" -- ensure_swap
+
 install_prereqs() {
   apt-get update
   apt-get install -y ca-certificates curl git build-essential python3

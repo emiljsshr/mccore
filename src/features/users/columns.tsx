@@ -6,8 +6,9 @@ import { PlayerAvatar } from "@/components/shared/player-avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { UserActions } from "@/features/users/user-actions";
 
-const ROLE_LABEL: Record<PlatformUser["role"], string> = {
+export const ROLE_LABEL: Record<PlatformUser["role"], string> = {
   owner: "Owner",
   administrator: "Administrator",
   developer: "Developer",
@@ -15,7 +16,7 @@ const ROLE_LABEL: Record<PlatformUser["role"], string> = {
   viewer: "Viewer",
 };
 
-const STATUS_CONFIG: Record<PlatformUser["status"], { label: string; className: string }> = {
+export const STATUS_CONFIG: Record<PlatformUser["status"], { label: string; className: string }> = {
   active: { label: "Active", className: "bg-status-online-muted text-status-online" },
   invited: { label: "Invited", className: "bg-status-info-muted text-status-info" },
   suspended: { label: "Suspended", className: "bg-status-critical-muted text-status-critical" },
@@ -66,5 +67,14 @@ export const userColumns: ColumnDef<PlatformUser>[] = [
       const config = STATUS_CONFIG[row.original.status];
       return <Badge className={cn(config.className)}>{config.label}</Badge>;
     },
+  },
+  {
+    id: "actions",
+    header: "",
+    cell: ({ row }) => (
+      <div className="flex justify-end">
+        <UserActions user={row.original} />
+      </div>
+    ),
   },
 ];

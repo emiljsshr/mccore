@@ -46,6 +46,15 @@ func writeServerProperties(serverDir string, p protocol.ServerInstallPayload) er
 		"enable-query":         "false",
 		"enable-rcon":          "false",
 	}
+	if p.MOTD != "" {
+		// Minecraft's own server.properties parser turns a literal `\n`
+		// (backslash + n, not a real newline byte) into the second line of
+		// the server-list MOTD — a real newline byte here would instead
+		// corrupt this file's own naive line-based format (parseProperties/
+		// serializeProperties do no escaping), so it's the escaped form that
+		// gets written, never the raw one.
+		managed["motd"] = strings.ReplaceAll(p.MOTD, "\n", `\n`)
+	}
 	for k, v := range managed {
 		existing[k] = v
 	}

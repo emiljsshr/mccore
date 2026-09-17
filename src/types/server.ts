@@ -72,6 +72,7 @@ export interface Server {
   whitelist: boolean;
   pvp: boolean;
   commandBlocks: boolean;
+  motd?: string;
   tags?: string[];
 }
 

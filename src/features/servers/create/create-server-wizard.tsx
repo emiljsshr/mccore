@@ -97,6 +97,7 @@ export function CreateServerWizard() {
         whitelist: state.whitelist,
         pvp: state.pvp,
         commandBlocks: state.commandBlocks,
+        motd: state.motd,
       },
       (index) => setInstallStep(index),
     );

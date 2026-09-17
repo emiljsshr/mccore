@@ -69,6 +69,7 @@ export const ServerDtoSchema = z.object({
   whitelist: z.boolean(),
   pvp: z.boolean(),
   commandBlocks: z.boolean(),
+  motd: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
 export type ServerDto = z.infer<typeof ServerDtoSchema>;
@@ -98,6 +99,16 @@ export const CreateServerInputSchema = z.object({
   whitelist: z.boolean(),
   pvp: z.boolean(),
   commandBlocks: z.boolean(),
+  // A raw newline separates the two lines the Minecraft server-list UI
+  // actually renders; §-prefixed color/format codes are validated for
+  // shape here but their exact meaning is Minecraft's, not ours.
+  motd: z
+    .string()
+    .trim()
+    .max(200, "MOTD must be at most 200 characters.")
+    .refine((v) => !/\r/.test(v), "MOTD must not contain carriage returns.")
+    .refine((v) => v.split("\n").length <= 2, "MOTD supports at most 2 lines.")
+    .optional(),
   eulaAccepted: z.literal(true, { message: "You must accept the Minecraft EULA to create a server." }),
 });
 export type CreateServerInput = z.infer<typeof CreateServerInputSchema>;

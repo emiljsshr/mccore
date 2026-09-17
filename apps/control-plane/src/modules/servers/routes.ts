@@ -83,7 +83,7 @@ export default async function serversRoutes(app: FastifyInstance) {
     assertServerAccessible(request, id);
     const server = await requireServer(app, id);
     if (server.status !== "OFFLINE") throw new ApiError(ErrorCode.CONFLICT, "Stop the server before changing its configuration.");
-    const schema = CreateServerInputSchema.pick({ name: true, description: true, icon: true, maxPlayers: true, gameMode: true, difficulty: true, onlineMode: true, whitelist: true, pvp: true, commandBlocks: true, memoryMaxMb: true, cpuLimitPercent: true });
+    const schema = CreateServerInputSchema.pick({ name: true, description: true, icon: true, maxPlayers: true, gameMode: true, difficulty: true, onlineMode: true, whitelist: true, pvp: true, commandBlocks: true, memoryMaxMb: true, cpuLimitPercent: true, motd: true });
     const input = schema.parse(request.body);
     if (input.memoryMaxMb < server.memoryMinMb) throw new ApiError(ErrorCode.VALIDATION_ERROR, "Maximum memory must be at least the server minimum.");
     const lockId = ulid();
@@ -138,6 +138,7 @@ export default async function serversRoutes(app: FastifyInstance) {
             whitelist: input.whitelist,
             pvp: input.pvp,
             commandBlocks: input.commandBlocks,
+            motd: input.motd,
             serverDirectory: serverId,
             autoStart: false,
             autoRestart: true,
@@ -193,6 +194,7 @@ export default async function serversRoutes(app: FastifyInstance) {
           whitelist: input.whitelist,
           pvp: input.pvp,
           commandBlocks: input.commandBlocks,
+          motd: input.motd,
           eulaAccepted: true,
           autoStart: false,
         },

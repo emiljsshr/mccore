@@ -54,6 +54,7 @@ export function toServerDto(server: MinecraftServer): ServerDto {
     whitelist: server.whitelist,
     pvp: server.pvp,
     commandBlocks: server.commandBlocks,
+    motd: server.motd ?? undefined,
     tags: server.tags,
   };
 }

@@ -314,6 +314,7 @@ model MinecraftServer {
   whitelist              Boolean       @default(false)
   pvp                    Boolean       @default(true)
   commandBlocks          Boolean       @default(false)
+  motd                   String?
   serverDirectory        String
   jarFile                String        @default("server.jar")
   autoStart              Boolean       @default(false)

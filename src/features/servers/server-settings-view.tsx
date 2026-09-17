@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { IconPicker } from "@/components/shared/icon-picker";
+import { MotdEditor } from "@/components/shared/motd-editor";
 import { deleteServer } from "@/services";
 import { Loader2 } from "@/lib/icons";
 
@@ -23,6 +24,7 @@ export function ServerSettingsView({ server }: { server: Server }) {
   const [name, setName] = useState(server.name);
   const [icon, setIcon] = useState(server.icon);
   const [description, setDescription] = useState(server.description ?? "");
+  const [motd, setMotd] = useState(server.motd ?? "");
   const [maxPlayers, setMaxPlayers] = useState(server.players.max);
   const [gameMode, setGameMode] = useState(server.gameMode);
   const [difficulty, setDifficulty] = useState(server.difficulty);
@@ -38,7 +40,7 @@ export function ServerSettingsView({ server }: { server: Server }) {
   async function handleSave() {
     setSaving(true);
     try {
-      await api(`/servers/${server.id}`, mutation("PATCH", { name, icon, description, maxPlayers, gameMode, difficulty, onlineMode, whitelist, pvp, commandBlocks, memoryMaxMb: memoryMaxGb * 1024, cpuLimitPercent: cpuLimit }));
+      await api(`/servers/${server.id}`, mutation("PATCH", { name, icon, description, maxPlayers, gameMode, difficulty, onlineMode, whitelist, pvp, commandBlocks, motd, memoryMaxMb: memoryMaxGb * 1024, cpuLimitPercent: cpuLimit }));
       await getServer(server.id); toast.success("Settings saved");
     } catch(e) { toast.error((e as Error).message); } finally { setSaving(false); }
   }
@@ -73,6 +75,7 @@ export function ServerSettingsView({ server }: { server: Server }) {
               rows={2}
             />
           </div>
+          <MotdEditor value={motd} onChange={setMotd} />
         </CardContent>
       </Card>
 

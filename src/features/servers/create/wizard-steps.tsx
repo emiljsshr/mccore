@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SoftwareIcon } from "@/components/shared/software-icon";
 import { IconPicker } from "@/components/shared/icon-picker";
+import { MotdEditor } from "@/components/shared/motd-editor";
 import { ServerBlockIcon } from "@/components/shared/server-block-icon";
 import { cn } from "@/lib/utils";
 import { SERVER_SOFTWARE_LABEL } from "@/types";
@@ -262,6 +263,8 @@ export function StepGameSettings({ state, update }: StepProps) {
           </Select>
         </div>
       </div>
+
+      <MotdEditor value={state.motd} onChange={(motd) => update({ motd })} />
 
       <div className="space-y-2">
         {[

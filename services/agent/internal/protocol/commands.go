@@ -22,6 +22,7 @@ type ServerInstallPayload struct {
 	Whitelist        bool   `json:"whitelist"`
 	PVP              bool   `json:"pvp"`
 	CommandBlocks    bool   `json:"commandBlocks"`
+	MOTD             string `json:"motd,omitempty"`
 	EulaAccepted     bool   `json:"eulaAccepted"`
 	AutoStart        bool   `json:"autoStart"`
 }

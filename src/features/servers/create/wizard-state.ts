@@ -20,6 +20,7 @@ export interface WizardState {
   whitelist: boolean;
   pvp: boolean;
   commandBlocks: boolean;
+  motd: string;
 }
 
 export const DEFAULT_WIZARD_STATE: WizardState = {
@@ -41,4 +42,5 @@ export const DEFAULT_WIZARD_STATE: WizardState = {
   whitelist: false,
   pvp: true,
   commandBlocks: false,
+  motd: "",
 };

@@ -6,6 +6,7 @@ export async function getPlayer(id: string): Promise<Player | undefined> { retur
 function player(id: string) { const p = usePlayerStore.getState().players.find(p => p.id === id || p.uuid === id); if (!p?.serverId) throw new Error("Select a server for this player action."); return p; }
 async function act(id: string, action: string, body: object = {}) { const p = player(id); await api(`/servers/${p.serverId}/players/${p.uuid}/${action}`, mutation("POST", body)); await listPlayers(); }
 export const kickPlayer = (id: string) => act(id, "kick");
+export const messagePlayer = (id: string, message: string) => act(id, "message", { message });
 export const banPlayer = (id: string, reason: string, _bannedBy: string) => act(id, "ban", { reason });
 export const unbanPlayer = (id: string) => act(id, "pardon");
 export const toggleOperator = (id: string) => act(id, "op", { action: player(id).operator ? "deop" : "op" });

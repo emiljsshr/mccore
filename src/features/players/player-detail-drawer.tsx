@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlayerAvatar } from "@/components/shared/player-avatar";
 import { InventoryGrid } from "@/features/players/inventory-grid";
 import { BanPlayerDialog } from "@/features/players/ban-player-dialog";
+import { MessagePlayerDialog } from "@/features/players/message-player-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { formatDateTime, formatPlaytime, formatRelativeTime } from "@/lib/format";
 import type { GameMode, Player } from "@/types";
@@ -42,6 +43,7 @@ export function PlayerDetailDrawer({ player, onOpenChange }: PlayerDetailDrawerP
   const [confirmKick, setConfirmKick] = useState(false);
   const [confirmBan, setConfirmBan] = useState(false);
   const [confirmUnban, setConfirmUnban] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
 
   if (!player) return null;
 
@@ -149,7 +151,7 @@ export function PlayerDetailDrawer({ player, onOpenChange }: PlayerDetailDrawerP
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" disabled={!player.online}>
+              <Button variant="outline" size="sm" disabled={!player.online} onClick={() => setMessageOpen(true)}>
                 <MessageSquare className="size-3.5" /> Message
               </Button>
               <Button variant="outline" size="sm" disabled={!player.online}>
@@ -242,6 +244,13 @@ export function PlayerDetailDrawer({ player, onOpenChange }: PlayerDetailDrawerP
       <BanPlayerDialog
         open={confirmBan}
         onOpenChange={setConfirmBan}
+        playerId={player.id}
+        username={player.username}
+      />
+
+      <MessagePlayerDialog
+        open={messageOpen}
+        onOpenChange={setMessageOpen}
         playerId={player.id}
         username={player.username}
       />

@@ -17,6 +17,7 @@ import (
 	"github.com/cometa-mccore/mccore/services/agent/internal/config"
 	"github.com/cometa-mccore/mccore/services/agent/internal/identity"
 	"github.com/cometa-mccore/mccore/services/agent/internal/orchestrator"
+	"github.com/cometa-mccore/mccore/services/agent/internal/playertrack"
 	"github.com/cometa-mccore/mccore/services/agent/internal/process"
 	"github.com/cometa-mccore/mccore/services/agent/internal/protocol"
 	"github.com/cometa-mccore/mccore/services/agent/internal/state"
@@ -82,6 +83,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	var orch *orchestrator.Orchestrator
 
 	cgroupController := cgroup.NewController()
+	players := playertrack.NewTracker()
 	procMgr := process.NewManager(
 		cgroupController,
 		func(serverID string, lines []protocol.ConsoleLine) {
@@ -90,6 +92,24 @@ func run(cfg config.Config, logger *slog.Logger) error {
 			}
 			if err := client.SendEvent("server.console", protocol.ServerConsoleEvent{ServerID: serverID, Lines: lines}); err != nil {
 				logger.Warn("failed to send console event", "error", err, "serverId", serverID)
+			}
+			// No RCON/query-protocol integration (§ mcCore Bridge, not yet
+			// built) — the server's own login log lines are the only
+			// source of truth this Agent has for who is currently
+			// connected. See internal/playertrack.
+			for _, line := range lines {
+				event := players.Observe(serverID, line.Message)
+				if event == nil {
+					continue
+				}
+				eventType := "player.leave"
+				if event.Joined {
+					eventType = "player.join"
+				}
+				payload := protocol.PlayerEvent{ServerID: serverID, UUID: event.UUID, Username: event.Username}
+				if err := client.SendEvent(eventType, payload); err != nil {
+					logger.Warn("failed to send player event", "error", err, "serverId", serverID, "type", eventType)
+				}
 			}
 		},
 		func(info process.ExitInfo) {
@@ -103,6 +123,7 @@ func run(cfg config.Config, logger *slog.Logger) error {
 				_ = client.SendEvent("server.status", protocol.ServerStatusEvent{ServerID: info.ServerID, Status: status, Message: message})
 			}
 			_ = stateStore.ClearServerProcess(info.ServerID)
+			players.Reset(info.ServerID)
 		},
 	)
 

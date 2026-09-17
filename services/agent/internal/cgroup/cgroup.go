@@ -19,4 +19,12 @@ type Controller interface {
 	// cgroup's procs file path to write the child PID into after Start.
 	Prepare(ctx context.Context, serverID string, limits Limits) (procsFilePath string, err error)
 	Remove(ctx context.Context, serverID string) error
+	// Stats reads this server's current resource usage directly from its
+	// cgroup. ok is false when no reading is available yet — cgroups v2
+	// unsupported/unmounted, the server isn't running, or (for cpuPercent
+	// only) this is the first call for serverID and there's no prior
+	// sample yet to diff against. Feeds the mcCore Bridge plugin's
+	// periodic TPS/MSPT report (see cmd/mcagent) with real per-server
+	// cpu/memory numbers instead of leaving those fields at zero.
+	Stats(ctx context.Context, serverID string) (cpuPercent float64, memoryUsedMb int64, ok bool)
 }

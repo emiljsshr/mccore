@@ -52,12 +52,32 @@ const PlayerAchievementPayload = z.object({
   description: z.string(),
 });
 
+const PlayerDeathPayload = z.object({
+  serverId: z.string(),
+  uuid: z.string(),
+  username: z.string(),
+  message: z.string(),
+  killer: z.string().optional(),
+});
+
+const ChatMessagePayload = z.object({
+  serverId: z.string(),
+  uuid: z.string(),
+  username: z.string(),
+  message: z.string(),
+});
+
 // Passed through close to verbatim from the Bridge plugin's own JSON (see
 // Wire.java) rather than a strict schema — its exact shape depends on
 // whether the target player was online, and it's resolved into a pending
 // HTTP request (modules/players/invsee.ts), never persisted or broadcast,
 // so there's no wire contract with the browser to validate against here.
 const PlayerInventorySnapshotPayload = z.object({ requestId: z.string() }).passthrough();
+
+// Same "resolved into a pending HTTP request, never broadcast" shape as
+// PlayerInventorySnapshotPayload above, for the worldstats round trip (see
+// modules/players/worldstats.ts).
+const WorldStatsPayload = z.object({ requestId: z.string() }).passthrough();
 
 const BackupProgressPayload = z.object({
   serverId: z.string(),
@@ -112,8 +132,14 @@ export async function dispatchAgentEvent(app: FastifyInstance, frame: { kind: "e
         return await onPlayerLeave(app, PlayerEventPayload.parse(frame.payload));
       case "player.achievement":
         return await onPlayerAchievement(app, PlayerAchievementPayload.parse(frame.payload));
+      case "player.death":
+        return onPlayerDeath(app, PlayerDeathPayload.parse(frame.payload));
+      case "chat.message":
+        return onChatMessage(app, ChatMessagePayload.parse(frame.payload));
       case "player.inventory.snapshot":
         return onPlayerInventorySnapshot(app, PlayerInventorySnapshotPayload.parse(frame.payload));
+      case "server.worldstats":
+        return onWorldStats(app, WorldStatsPayload.parse(frame.payload));
       case "backup.progress":
         return await onBackupProgress(app, BackupProgressPayload.parse(frame.payload));
       case "backup.restore.progress":
@@ -304,6 +330,31 @@ async function onPlayerAchievement(app: FastifyInstance, payload: z.infer<typeof
 
 function onPlayerInventorySnapshot(app: FastifyInstance, payload: z.infer<typeof PlayerInventorySnapshotPayload>) {
   app.invsee.resolve(payload.requestId, payload);
+}
+
+// Ephemeral, like server.console — a kill-feed moment, not something the
+// player detail page persists (unlike player.achievement above, which is
+// earned at most once per player per server and so is worth an upsert).
+function onPlayerDeath(app: FastifyInstance, payload: z.infer<typeof PlayerDeathPayload>) {
+  app.liveHub.broadcast(`server:${payload.serverId}`, "player.death", payload.serverId, {
+    uuid: payload.uuid,
+    username: payload.username,
+    message: payload.message,
+    killer: payload.killer,
+  });
+}
+
+// Also ephemeral — mirrors server.console: forwarded live, never stored.
+function onChatMessage(app: FastifyInstance, payload: z.infer<typeof ChatMessagePayload>) {
+  app.liveHub.broadcast(`server:${payload.serverId}`, "chat.message", payload.serverId, {
+    uuid: payload.uuid,
+    username: payload.username,
+    message: payload.message,
+  });
+}
+
+function onWorldStats(app: FastifyInstance, payload: z.infer<typeof WorldStatsPayload>) {
+  app.worldStats.resolve(payload.requestId, payload);
 }
 
 async function onBackupProgress(app: FastifyInstance, payload: z.infer<typeof BackupProgressPayload>) {

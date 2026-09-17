@@ -287,6 +287,50 @@ export default async function playersRoutes(app: FastifyInstance) {
     };
   });
 
+  // Live snapshot via the mcCore Bridge plugin — same shape as invsee
+  // above (a console command out, a console line back, correlated by
+  // requestId; see modules/players/worldstats.ts), just with no target
+  // player: every loaded world's name, loaded chunk count, and entity
+  // count. Not a "players" concern semantically, but kept alongside invsee
+  // deliberately — same round trip, same permission model, one less file
+  // to keep in sync with it.
+  app.get("/api/v1/servers/:id/world-stats", { preHandler: app.requirePermission("worlds.view") }, async (request) => {
+    const { id } = request.params as { id: string };
+    assertServerAccessible(request, id);
+    const server = await requireServer(app, id);
+
+    if (server.status !== "ONLINE") throw new ApiError(ErrorCode.SERVER_NOT_RUNNING, "Server is not running.");
+    if (!app.agentHub.isConnected(server.nodeId)) throw new ApiError(ErrorCode.NODE_OFFLINE, "Node is not connected.");
+
+    const requestId = ulid();
+    const responsePromise = app.worldStats.register(requestId);
+    const ack = await app.agentHub.sendCommand(server.nodeId, {
+      commandId: ulid(),
+      type: "console.command",
+      issuedAt: new Date().toISOString(),
+      payload: { serverId: id, command: `mccorebridge worldstats ${requestId}` },
+    });
+    if (!ack.ok) throw new ApiError(ErrorCode.INTERNAL_ERROR, ack.errorMessage ?? "Could not reach the server.");
+
+    let snapshot: Record<string, unknown>;
+    try {
+      snapshot = await responsePromise;
+    } catch (err) {
+      throw new ApiError(ErrorCode.INTERNAL_ERROR, (err as Error).message);
+    }
+
+    const worlds = (Array.isArray(snapshot.worlds) ? snapshot.worlds : [])
+      .map((raw) => {
+        if (!raw || typeof raw !== "object") return undefined;
+        const r = raw as Record<string, unknown>;
+        if (typeof r.name !== "string" || typeof r.loadedChunks !== "number" || typeof r.entityCount !== "number") return undefined;
+        return { name: r.name, loadedChunks: r.loadedChunks, entityCount: r.entityCount };
+      })
+      .filter((w): w is { name: string; loadedChunks: number; entityCount: number } => w !== undefined);
+
+    return { worlds };
+  });
+
   app.post("/api/v1/servers/:id/players/:uuid/kick", { preHandler: app.requirePermission("players.kick") }, async (request) => {
     const { id, uuid } = request.params as { id: string; uuid: string };
     assertServerAccessible(request, id);

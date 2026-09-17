@@ -5,6 +5,7 @@ import { Globe } from "@/lib/icons";
 import type { World } from "@/types";
 import { listWorlds } from "@/services";
 import { WorldCard } from "@/features/worlds/world-card";
+import { WorldStatsCard } from "@/features/worlds/world-stats-card";
 import { CreateWorldDialog } from "@/features/worlds/create-world-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,8 @@ export function WorldsView({ serverId }: { serverId: string }) {
 
   return (
     <div className="space-y-4">
+      <WorldStatsCard serverId={serverId} />
+
       <div className="flex justify-end">
         <CreateWorldDialog
           serverId={serverId}

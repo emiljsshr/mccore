@@ -53,6 +53,13 @@ export const PlayerAchievementEventSchema = z.object({
   title: z.string(),
   description: z.string(),
 });
+export const PlayerDeathEventSchema = z.object({
+  uuid: z.string(),
+  username: z.string(),
+  message: z.string(),
+  killer: z.string().optional(),
+});
+export const ChatMessageEventSchema = z.object({ uuid: z.string(), username: z.string(), message: z.string() });
 
 export const BackupProgressEventSchema = z.object({
   backupId: z.string(),
@@ -85,6 +92,8 @@ export const WS_EVENT_SCHEMAS = {
   "player.join": PlayerJoinEventSchema,
   "player.leave": PlayerLeaveEventSchema,
   "player.achievement": PlayerAchievementEventSchema,
+  "player.death": PlayerDeathEventSchema,
+  "chat.message": ChatMessageEventSchema,
   "backup.progress": BackupProgressEventSchema,
   "plugin.install.progress": PluginInstallProgressEventSchema,
   "operation.updated": OperationUpdatedEventSchema,

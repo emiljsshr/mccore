@@ -34,7 +34,8 @@ export async function installModrinthProject(
   hit: ModrinthSearchHit,
   serverId: string,
   onProgress?: (stepIndex: number, step: string) => void,
+  force = false,
 ): Promise<InstalledPlugin> {
   const { installPlugin } = await import("./plugin-service");
-  return installPlugin(hit.project_id, serverId, onProgress);
+  return installPlugin(hit.project_id, serverId, onProgress, force);
 }

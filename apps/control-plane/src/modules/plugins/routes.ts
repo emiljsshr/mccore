@@ -11,6 +11,12 @@ const InstallPluginSchema = z.object({
   providerSlug: z.literal("modrinth"),
   providerProjectId: z.string().min(1).max(64),
   versionId: z.string().min(1).max(64).optional(),
+  // Set once the user has already been shown a compatibility warning
+  // client-side (see checkCompatibility/"Install Anyway") and chose to
+  // proceed anyway — falls back to the loader's newest build regardless of
+  // its declared Minecraft-version tags, instead of hard-blocking the
+  // install. Never bypasses loader compatibility, only the version tag.
+  force: z.boolean().optional().default(false),
 });
 
 export default async function pluginsRoutes(app: FastifyInstance) {
@@ -55,7 +61,17 @@ export default async function pluginsRoutes(app: FastifyInstance) {
 
     const loader = server.software === "PAPER" || server.software === "PURPUR" ? "paper" : server.software.toLowerCase();
     const versions = await provider.getVersions(input.providerProjectId, { minecraftVersion: server.minecraftVersion, loader });
-    const version = input.versionId ? versions.find((v) => v.versionId === input.versionId) : versions[0];
+    let version = input.versionId ? versions.find((v) => v.versionId === input.versionId) : versions[0];
+    let forcedIncompatible = false;
+    if (!version && input.force) {
+      // No build declares support for this exact Minecraft version — fall
+      // back to the newest build for this loader across all versions
+      // (Modrinth returns them newest-first) rather than blocking outright.
+      // Still respects the loader itself; only the version tag is ignored.
+      const anyVersions = await provider.getVersions(input.providerProjectId, { loader });
+      version = input.versionId ? anyVersions.find((v) => v.versionId === input.versionId) : anyVersions[0];
+      forcedIncompatible = Boolean(version);
+    }
     if (!version) {
       throw new ApiError(
         ErrorCode.VALIDATION_ERROR,
@@ -103,11 +119,11 @@ export default async function pluginsRoutes(app: FastifyInstance) {
     await recordAudit(app.prisma, {
       actorUserId: request.user!.id,
       action: existingPluginId ? "plugin.update" : "plugin.install",
-      description: `${request.user!.name} ${existingPluginId ? "updated" : "installed"} plugin "${project.name}" on "${server.name}".`,
+      description: `${request.user!.name} ${existingPluginId ? "updated" : "installed"} plugin "${project.name}" on "${server.name}"${forcedIncompatible ? " despite no build declaring support for this Minecraft version (forced)" : ""}.`,
       targetType: "plugin",
       targetLabel: project.name,
       serverId: server.id,
-      severity: "INFO",
+      severity: forcedIncompatible ? "WARNING" : "INFO",
       ipAddress: request.ip,
     });
 

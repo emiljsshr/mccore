@@ -42,7 +42,7 @@ export function InstallPluginDialog({ hit, serverId, serverName, onOpenChange }:
     setStepIndex(0);
     setDone(false);
     try {
-      await installModrinthProject(hit, serverId, (index) => setStepIndex(index));
+      await installModrinthProject(hit, serverId, (index) => setStepIndex(index), compat?.level !== "compatible");
       setDone(true);
       toast.success(`${hit.title} installed on ${serverName}`);
     } catch (e) {
@@ -87,6 +87,7 @@ export function InstallPluginDialog({ hit, serverId, serverName, onOpenChange }:
               >
                 <p className="font-medium">{compat.level === "incompatible" ? "This may not work" : "Possible issue"}</p>
                 <p className="text-foreground/80">{compat.reason}</p>
+                <p className="mt-1 text-foreground/80">Installing anyway is at your own risk — the server may fail to start or the plugin may misbehave.</p>
               </div>
             )}
           </div>

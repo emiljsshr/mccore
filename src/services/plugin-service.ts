@@ -15,8 +15,8 @@ export async function setPluginStatus(id: string, status: InstalledPlugin["statu
 export async function deletePlugin(id: string) { const p = plugin(id); await api(`/servers/${p.serverId}/plugins/${id}`, mutation("DELETE")); usePluginStore.getState().removePlugin(id); }
 export async function updatePlugin(id: string) { const p = plugin(id); const { operation } = await api<{ operation: OperationDto }>(`/servers/${p.serverId}/plugins/${id}/update`, mutation("POST", { providerSlug: p.providerSlug, providerProjectId: p.providerProjectId }, true)); await waitForOperation(operation.id); await listInstalledPlugins(p.serverId); }
 export const INSTALL_PLUGIN_STEPS = ["Downloading", "Installing", "Installed"] as const;
-export async function installPlugin(providerProjectId: string, serverId: string, onProgress?: (index: number, step: string) => void): Promise<InstalledPlugin> {
-  const { operation } = await api<{ operation: OperationDto }>(`/servers/${serverId}/plugins/install`, mutation("POST", { providerSlug: "modrinth", providerProjectId }, true));
+export async function installPlugin(providerProjectId: string, serverId: string, onProgress?: (index: number, step: string) => void, force = false): Promise<InstalledPlugin> {
+  const { operation } = await api<{ operation: OperationDto }>(`/servers/${serverId}/plugins/install`, mutation("POST", { providerSlug: "modrinth", providerProjectId, force }, true));
   await waitForOperation(operation.id, op => { const i = op.status === "SUCCEEDED" ? 2 : op.progress < 75 ? 0 : 1; onProgress?.(i, INSTALL_PLUGIN_STEPS[i]); });
   const installed = (await listInstalledPlugins(serverId)).find(p => p.providerProjectId === providerProjectId);
   if (!installed) throw new Error("Installation completed, but plugin metadata could not be loaded. Refresh the page.");

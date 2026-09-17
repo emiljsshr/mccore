@@ -55,6 +55,17 @@ func (o *Orchestrator) startProcess(serverID string) error {
 		args = append(args, "--nogui")
 	}
 
+	// Keeps an already-installed server's Bridge plugin in sync with
+	// whatever version this Agent binary currently bundles — install and
+	// configure already do this, but a server that's just being restarted
+	// (the common case after upgrading the Agent) goes through neither, so
+	// without this it would keep running a stale jar indefinitely. Best
+	// effort: a failure here must never block starting the actual
+	// Minecraft process over a bonus feature.
+	if err := installBridgePlugin(m.Software, serverDir); err != nil {
+		o.logger.Warn("could not refresh mcCore Bridge plugin before start", "serverId", serverID, "err", err)
+	}
+
 	o.emitServerStatus(serverID, "starting", "", 0)
 
 	pid, err := o.procMgr.Start(process.StartSpec{

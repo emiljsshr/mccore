@@ -41,7 +41,7 @@ function ActivityToast({ username, message, tone }: { username: string; message:
  * is open, rather than app-wide.
  */
 export function PlayerActivityNotifications() {
-  const serverIds = useServerStore((s) => s.servers.map((server) => server.id)).join(",");
+  const serverIds = useServerStore((s) => s.servers.map((server) => server.id).join(","));
 
   useEffect(() => {
     const ids = serverIds.split(",").filter(Boolean);

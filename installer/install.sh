@@ -48,7 +48,11 @@ install_prereqs() {
   apt-get update
   apt-get install -y ca-certificates curl xz-utils openssl python3 tar gzip
   if [[ $mode != node ]]; then apt-get install -y postgresql postgresql-client; fi
-  if [[ $mode != control ]]; then apt-get install -y openjdk-21-jre-headless; fi
+  # Newest LTS only (see services/agent/internal/java/java.go's Resolver):
+  # the Agent runs older servers on this same runtime rather than needing
+  # every historical JDK installed, since newer JVMs are backward
+  # compatible with older server jars in practice.
+  if [[ $mode != control ]]; then apt-get install -y openjdk-25-jre-headless; fi
 }
 run_step "Installing prerequisites" -- install_prereqs
 

@@ -87,19 +87,40 @@ func describe(installs []sysinfo.JavaInstallation) string {
 	return strings.Join(parts, ", ")
 }
 
+// newestKnownLTS is the newest Java LTS this Agent knows how to require.
+// Used whenever a Minecraft version can't be placed in the compatibility
+// table below with confidence — deliberately the newest rather than an
+// older default, since an old JDK fails outright on a server that needs a
+// newer one, whereas a newer JDK is normally backward compatible.
+const newestKnownLTS = "25"
+
 // SelectorForMinecraftVersion maps a Minecraft version to the Java major
 // version Mojang/PaperMC require for it (§24). This mirrors the well-known
-// public compatibility table; unknown/very new versions conservatively
-// default to the newest LTS this Agent knows about (21) rather than
-// guessing lower and failing at server startup.
+// public compatibility table for the legacy "1.MINOR.PATCH" versioning
+// scheme (see https://docs.papermc.io/misc/java-install).
+//
+// Minecraft versions stopped being "1.x" at some point after Java 21
+// became insufficient (observed live: PaperMC's own startup log reads
+// "Minecraft 26.1 and newer requires running the server with Java 25 or
+// above" for a server on the new "26.1" scheme) — this Agent has no
+// verified table for that new scheme's exact version cutoffs, so any
+// version whose leading component isn't "1" conservatively gets
+// newestKnownLTS rather than a guessed-at mapping.
 func SelectorForMinecraftVersion(minecraftVersion string) string {
 	parts := strings.Split(minecraftVersion, ".")
 	if len(parts) < 2 {
-		return "21"
+		return newestKnownLTS
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return newestKnownLTS
+	}
+	if major != 1 {
+		return newestKnownLTS
 	}
 	minor, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return "21"
+		return newestKnownLTS
 	}
 	patch := 0
 	if len(parts) >= 3 {

@@ -63,7 +63,7 @@ if [[ -n $local_archive ]]; then
   copy_release_archive() { cp -- "$local_archive" "$work/release.tar.gz"; }
   run_step "Copying release archive" -- copy_release_archive
 else
-  download_release_archive() { curl --proto '=https' --tlsv1.2 --fail --show-error --location --max-redirs 3 --connect-timeout 15 --max-time 1800 "$archive_url" -o "$work/release.tar.gz"; }
+  download_release_archive() { curl --proto '=https' --tlsv1.2 --fail --show-error --location --max-redirs 3 --connect-timeout 15 --max-time 1800 --retry 5 --retry-delay 3 --retry-all-errors "$archive_url" -o "$work/release.tar.gz"; }
   run_step "Downloading release archive" -- download_release_archive
 fi
 
@@ -105,10 +105,10 @@ run_step "Creating service user and directories" -- create_service_user
 if [[ $mode != node ]]; then
   install_node_runtime() {
     # Install the current Node 24 LTS patch from the official HTTPS distribution.
-    curl --proto '=https' --fail --show-error --location https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/node-shasums"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/node-shasums"
     node_tar=$(awk -v a="$node_arch" '$2 ~ ("-linux-" a "\\.tar\\.xz$") {print $2}' "$work/node-shasums")
     [[ $node_tar =~ ^node-v24\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || { echo 'Invalid Node distribution metadata.' >&2; return 1; }
-    curl --proto '=https' --fail --show-error --location "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
     (cd "$work" && awk -v f="$node_tar" '$2==f' node-shasums | sha256sum -c -)
     install -d /opt/mccore/node
     tar --strip-components=1 -xJf "$work/$node_tar" -C /opt/mccore/node

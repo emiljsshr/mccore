@@ -95,10 +95,10 @@ if command -v node >/dev/null 2>&1; then
 fi
 if [[ $need_node == 1 ]]; then
   install_node() {
-    curl --proto '=https' --fail --show-error --location https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/shasums"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$work/shasums"
     node_tar=$(awk -v a="$node_arch" '$2 ~ ("-linux-" a "\\.tar\\.xz$") {print $2}' "$work/shasums")
     [[ $node_tar =~ ^node-v24\.[0-9]+\.[0-9]+-linux-(x64|arm64)\.tar\.xz$ ]] || { echo 'Invalid Node distribution metadata.' >&2; return 1; }
-    curl --proto '=https' --fail --show-error --location "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors "https://nodejs.org/dist/latest-v24.x/$node_tar" -o "$work/$node_tar"
     (cd "$work" && awk -v f="$node_tar" '$2==f' shasums | sha256sum -c -)
     install -d /usr/local/lib/mccore-build-node
     tar --strip-components=1 -xJf "$work/$node_tar" -C /usr/local/lib/mccore-build-node
@@ -114,13 +114,13 @@ fi
 # --- Go (only needed to compile the Agent/CLI binaries) -------------------
 if ! command -v go >/dev/null 2>&1; then
   install_go() {
-    go_version=$(curl --proto '=https' --fail --show-error --location https://go.dev/VERSION?m=text | head -1)
+    go_version=$(curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors https://go.dev/VERSION?m=text | head -1)
     go_tar="${go_version}.linux-${go_arch}.tar.gz"
-    curl --proto '=https' --fail --show-error --location "https://go.dev/dl/${go_tar}" -o "$work/$go_tar"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors "https://go.dev/dl/${go_tar}" -o "$work/$go_tar"
     # go.dev doesn't serve a plain "<file>.sha256" sidecar (that returns an
     # HTML redirect page, not a checksum) — the official source of checksums
     # is the JSON release index.
-    curl --proto '=https' --fail --show-error --location "https://go.dev/dl/?mode=json&include=all" -o "$work/go-releases.json"
+    curl --proto '=https' --fail --show-error --location --retry 5 --retry-delay 3 --retry-all-errors "https://go.dev/dl/?mode=json&include=all" -o "$work/go-releases.json"
     go_sha256=$(python3 -c "
 import json, sys
 with open('$work/go-releases.json') as fh:

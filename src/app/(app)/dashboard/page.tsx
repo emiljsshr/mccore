@@ -8,12 +8,14 @@ import { RecentActivity } from "@/features/dashboard/recent-activity";
 import { PromoBanner } from "@/features/dashboard/promo-banner";
 import { NodesSummaryCard } from "@/features/dashboard/nodes-summary-card";
 import { PluginUpdatesCard } from "@/features/dashboard/plugin-updates-card";
+import { PlayerActivityNotifications } from "@/features/dashboard/player-activity-notifications";
 
 export const metadata: Metadata = { title: "Dashboard — Cometa mcCore" };
 
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
+      <PlayerActivityNotifications />
       <DashboardGreeting />
       <DashboardKpiRow />
 

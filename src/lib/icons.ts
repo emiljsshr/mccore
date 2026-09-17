@@ -40,6 +40,8 @@ export {
   IconCopy as Copy,
   IconCpu as Cpu,
   IconDatabase as Database,
+  IconDoorEnter as DoorEnter,
+  IconDoorExit as DoorExit,
   IconDownload as Download,
   IconExternalLink as ExternalLink,
   IconEye as Eye,

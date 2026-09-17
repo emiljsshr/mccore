@@ -112,10 +112,11 @@ func run(cfg config.Config, logger *slog.Logger) error {
 				}
 			}
 			// The mcCore Bridge plugin (services/bridge-plugin) reports
-			// advancements and inventory snapshots the same way — as
-			// console output, since it deliberately opens no network port
-			// of its own. Forwarded close to verbatim; the control plane's
-			// zod schemas do the actual structural validation.
+			// advancements, deaths, chat, inventory snapshots, TPS/MSPT and
+			// world stats the same way — as console output, since it
+			// deliberately opens no network port of its own. Most of these
+			// are forwarded close to verbatim; the control plane's zod
+			// schemas do the actual structural validation.
 			for _, line := range lines {
 				data, ok := bridge.Parse(line.Message)
 				if !ok {
@@ -130,6 +131,41 @@ func run(cfg config.Config, logger *slog.Logger) error {
 				case "inventory":
 					if err := client.SendEvent("player.inventory.snapshot", data); err != nil {
 						logger.Warn("failed to send inventory snapshot event", "error", err, "serverId", serverID)
+					}
+				case "death":
+					if err := client.SendEvent("player.death", data); err != nil {
+						logger.Warn("failed to send death event", "error", err, "serverId", serverID)
+					}
+				case "chat":
+					if err := client.SendEvent("chat.message", data); err != nil {
+						logger.Warn("failed to send chat event", "error", err, "serverId", serverID)
+					}
+				case "worldstats":
+					if err := client.SendEvent("server.worldstats", data); err != nil {
+						logger.Warn("failed to send world stats event", "error", err, "serverId", serverID)
+					}
+				case "tps":
+					// Unlike the cases above, this one is enriched rather
+					// than forwarded verbatim: the plugin only knows
+					// TPS/MSPT, but the control plane's server.metrics
+					// event (already wired end-to-end into the dashboard's
+					// Performance panel — see event-dispatcher.ts) expects
+					// cpu/memory/player-count too, so those are sampled
+					// here from the same per-server cgroup Prepare already
+					// set up and from the join/leave tracker.
+					tps1m, _ := data["tps1m"].(float64)
+					mspt, _ := data["mspt"].(float64)
+					cpuPercent, memoryUsedMb, _ := cgroupController.Stats(context.Background(), serverID)
+					metrics := protocol.ServerMetricsEvent{
+						ServerID:      serverID,
+						CPUPercent:    cpuPercent,
+						MemoryUsedMb:  memoryUsedMb,
+						PlayersOnline: players.OnlineCount(serverID),
+						TPS:           tps1m,
+						MSPT:          mspt,
+					}
+					if err := client.SendEvent("server.metrics", metrics); err != nil {
+						logger.Warn("failed to send server metrics event", "error", err, "serverId", serverID)
 					}
 				}
 			}

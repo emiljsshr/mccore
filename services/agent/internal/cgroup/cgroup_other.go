@@ -18,3 +18,5 @@ func (c *noopController) Prepare(_ context.Context, _ string, _ Limits) (string,
 }
 
 func (c *noopController) Remove(_ context.Context, _ string) error { return nil }
+
+func (c *noopController) Stats(_ context.Context, _ string) (float64, int64, bool) { return 0, 0, false }

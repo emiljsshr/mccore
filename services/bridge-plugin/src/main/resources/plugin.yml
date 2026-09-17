@@ -4,14 +4,14 @@ main: dev.mccore.bridge.McCoreBridgePlugin
 api-version: '1.20'
 author: mcCore
 description: >-
-  Reports live in-game data (advancements, inventory snapshots) back to the
-  mcCore Agent over this server's own console output — no network port of
-  its own. Installed and managed automatically by the Agent; not meant to
-  be configured by hand.
+  Reports live in-game data (advancements, deaths, chat, inventory
+  snapshots, TPS/MSPT, world stats) back to the mcCore Agent over this
+  server's own console output — no network port of its own. Installed and
+  managed automatically by the Agent; not meant to be configured by hand.
 commands:
   mccorebridge:
     description: Internal command the mcCore Agent uses to request data from this plugin.
-    usage: /mccorebridge <invsee> <requestId> <username>
+    usage: /mccorebridge <invsee <requestId> <username>|worldstats <requestId>|broadcast <message...>>
     permission: mccorebridge.use
 permissions:
   mccorebridge.use:

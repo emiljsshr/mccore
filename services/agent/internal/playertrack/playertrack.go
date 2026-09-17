@@ -34,16 +34,18 @@ type Event struct {
 	Joined   bool // true = join, false = leave
 }
 
-// Tracker caches each server's currently-known username->UUID mappings.
-// Safe for concurrent use — console lines for different servers are
-// processed on different goroutines.
+// Tracker caches each server's currently-known username->UUID mappings, and
+// (separately) which usernames are currently online. Safe for concurrent
+// use — console lines for different servers are processed on different
+// goroutines.
 type Tracker struct {
-	mu    sync.Mutex
-	uuids map[string]map[string]string // serverID -> username -> uuid
+	mu     sync.Mutex
+	uuids  map[string]map[string]string // serverID -> username -> uuid
+	online map[string]map[string]bool   // serverID -> username -> currently online
 }
 
 func NewTracker() *Tracker {
-	return &Tracker{uuids: make(map[string]map[string]string)}
+	return &Tracker{uuids: make(map[string]map[string]string), online: make(map[string]map[string]bool)}
 }
 
 // Observe scans one console line for a UUID announcement or a join/leave,
@@ -62,17 +64,44 @@ func (t *Tracker) Observe(serverID, line string) *Event {
 	}
 	if m := joinLineRe.FindStringSubmatch(line); m != nil {
 		if uuid, ok := t.lookup(serverID, m[1]); ok {
+			t.setOnline(serverID, m[1], true)
 			return &Event{UUID: uuid, Username: m[1], Joined: true}
 		}
 		return nil
 	}
 	if m := leaveLineRe.FindStringSubmatch(line); m != nil {
 		if uuid, ok := t.lookup(serverID, m[1]); ok {
+			t.setOnline(serverID, m[1], false)
 			return &Event{UUID: uuid, Username: m[1], Joined: false}
 		}
 		return nil
 	}
 	return nil
+}
+
+func (t *Tracker) setOnline(serverID, username string, online bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if online {
+		if t.online[serverID] == nil {
+			t.online[serverID] = make(map[string]bool)
+		}
+		t.online[serverID][username] = true
+	} else if t.online[serverID] != nil {
+		delete(t.online[serverID], username)
+	}
+}
+
+// OnlineCount returns how many players this tracker currently believes are
+// connected to serverID — every "joined the game" line seen since the last
+// matching "left the game" or Reset. Used to fill in the playersOnline
+// field of the periodic server.metrics event (see cmd/mcagent's dispatch of
+// the Bridge plugin's "tps" line) without a separate RCON/query-protocol
+// integration.
+func (t *Tracker) OnlineCount(serverID string) int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return len(t.online[serverID])
 }
 
 func (t *Tracker) lookup(serverID, username string) (string, bool) {
@@ -86,11 +115,12 @@ func (t *Tracker) lookup(serverID, username string) (string, bool) {
 	return uuid, ok
 }
 
-// Reset drops a server's cached UUIDs — called when its process exits, so a
-// stale mapping from a previous run is never attributed to a differently
-// behaving restart.
+// Reset drops a server's cached UUIDs and online set — called when its
+// process exits, so a stale mapping from a previous run is never
+// attributed to a differently behaving restart.
 func (t *Tracker) Reset(serverID string) {
 	t.mu.Lock()
 	delete(t.uuids, serverID)
+	delete(t.online, serverID)
 	t.mu.Unlock()
 }

@@ -31,13 +31,18 @@ final class AdvancementListener implements Listener {
         if (display == null || !display.doesAnnounceToChat()) return;
 
         Player player = event.getPlayer();
+        String title = PlainTextComponentSerializer.plainText().serialize(display.title());
+        String description = PlainTextComponentSerializer.plainText().serialize(display.description());
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("type", "achievement");
         payload.put("uuid", player.getUniqueId().toString());
         payload.put("player", player.getName());
         payload.put("key", advancement.getKey().toString());
-        payload.put("title", PlainTextComponentSerializer.plainText().serialize(display.title()));
-        payload.put("description", PlainTextComponentSerializer.plainText().serialize(display.description()));
+        payload.put("title", title);
+        payload.put("description", description);
         Wire.emit(plugin.getLogger(), payload);
+
+        Notify.achievement(plugin, player, title, description);
     }
 }

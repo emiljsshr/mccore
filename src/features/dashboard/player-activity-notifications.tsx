@@ -6,15 +6,16 @@ import { subscribeLive } from "@/lib/live";
 import { playNotificationSound } from "@/lib/notification-sound";
 import { PlayerAvatar } from "@/components/shared/player-avatar";
 import { useServerStore } from "@/stores/use-server-store";
-import { DoorEnter, DoorExit, Trophy } from "@/lib/icons";
+import { DoorEnter, DoorExit, Skull, Trophy } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
-type Tone = "join" | "leave" | "achievement";
+type Tone = "join" | "leave" | "achievement" | "death";
 
 const TONE_VISUALS: Record<Tone, { icon: typeof DoorEnter; className: string }> = {
   join: { icon: DoorEnter, className: "text-status-online" },
   leave: { icon: DoorExit, className: "text-muted-foreground" },
   achievement: { icon: Trophy, className: "text-status-warning" },
+  death: { icon: Skull, className: "text-status-critical" },
 };
 
 function ActivityToast({ username, message, tone }: { username: string; message: string; tone: Tone }) {
@@ -64,6 +65,12 @@ export function PlayerActivityNotifications() {
           playNotificationSound();
           toast.custom(() => (
             <ActivityToast username={payload.username} message={`Earned "${payload.title}"`} tone="achievement" />
+          ));
+        } else if (event.type === "player.death") {
+          const payload = event.payload as { username: string; message: string };
+          playNotificationSound();
+          toast.custom(() => (
+            <ActivityToast username={payload.username} message={payload.message} tone="death" />
           ));
         }
       }),

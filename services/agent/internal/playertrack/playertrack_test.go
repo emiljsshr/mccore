@@ -74,3 +74,33 @@ func TestResetClearsCache(t *testing.T) {
 		t.Errorf("expected nil after Reset, got %+v", ev)
 	}
 }
+
+func TestOnlineCountTracksJoinsAndLeaves(t *testing.T) {
+	tr := NewTracker()
+	if got := tr.OnlineCount("srv1"); got != 0 {
+		t.Fatalf("OnlineCount on unseen server = %d, want 0", got)
+	}
+
+	tr.Observe("srv1", "[12:00:00 INFO]: UUID of player Steve is "+steveUUID)
+	tr.Observe("srv1", "[12:00:01 INFO]: Steve joined the game")
+	if got := tr.OnlineCount("srv1"); got != 1 {
+		t.Fatalf("OnlineCount after one join = %d, want 1", got)
+	}
+
+	const alexUUID = "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+	tr.Observe("srv1", "[12:00:02 INFO]: UUID of player Alex is "+alexUUID)
+	tr.Observe("srv1", "[12:00:03 INFO]: Alex joined the game")
+	if got := tr.OnlineCount("srv1"); got != 2 {
+		t.Fatalf("OnlineCount after two joins = %d, want 2", got)
+	}
+
+	tr.Observe("srv1", "[12:05:00 INFO]: Steve left the game")
+	if got := tr.OnlineCount("srv1"); got != 1 {
+		t.Fatalf("OnlineCount after one leave = %d, want 1", got)
+	}
+
+	tr.Reset("srv1")
+	if got := tr.OnlineCount("srv1"); got != 0 {
+		t.Fatalf("OnlineCount after Reset = %d, want 0", got)
+	}
+}

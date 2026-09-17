@@ -29,6 +29,7 @@ import metricsRoutes from "./modules/metrics/routes.js";
 import liveWsPlugin from "./ws/live-hub.js";
 import agentWsPlugin from "./ws/agent-hub.js";
 import invseePlugin from "./modules/players/invsee.js";
+import worldStatsPlugin from "./modules/players/worldstats.js";
 import { registerScheduler } from "./modules/schedules/scheduler.js";
 
 export interface BuildAppOptions {
@@ -70,6 +71,7 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(nodesRoutes);
   await app.register(serversRoutes);
   await app.register(invseePlugin);
+  await app.register(worldStatsPlugin);
   await app.register(playersRoutes);
   await app.register(filesRoutes);
   await app.register(backupsRoutes);

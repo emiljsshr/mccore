@@ -20,6 +20,9 @@ public final class McCoreBridgePlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new AdvancementListener(this), this);
+        getServer().getPluginManager().registerEvents(new DeathListener(this), this);
+        getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+        new TpsReporter(this).runTaskTimer(this, TpsReporter.PERIOD_TICKS, TpsReporter.PERIOD_TICKS);
         getLogger().info("mcCoreBridge ready.");
     }
 
@@ -27,7 +30,7 @@ public final class McCoreBridgePlugin extends JavaPlugin {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equalsIgnoreCase("mccorebridge")) return false;
         if (args.length < 1) {
-            sender.sendMessage("Usage: /mccorebridge <invsee> <requestId> <username>");
+            sender.sendMessage("Usage: /mccorebridge <invsee|worldstats|broadcast> ...");
             return true;
         }
         switch (args[0].toLowerCase(java.util.Locale.ROOT)) {
@@ -37,6 +40,20 @@ public final class McCoreBridgePlugin extends JavaPlugin {
                     return true;
                 }
                 InvseeCommand.run(this, args[1], args[2]);
+            }
+            case "worldstats" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: /mccorebridge worldstats <requestId>");
+                    return true;
+                }
+                WorldStatsCommand.run(this, args[1]);
+            }
+            case "broadcast" -> {
+                if (args.length < 2) {
+                    sender.sendMessage("Usage: /mccorebridge broadcast <message...>");
+                    return true;
+                }
+                BroadcastCommand.run(String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
             }
             default -> sender.sendMessage("Unknown mcCoreBridge subcommand: " + args[0]);
         }

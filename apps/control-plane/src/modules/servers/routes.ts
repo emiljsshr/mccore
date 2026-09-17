@@ -8,6 +8,7 @@ import { toServerDto, tryAcquireServerLock } from "./service.js";
 import { createOperation, toOperationDto } from "../operations/service.js";
 import { recordAudit } from "../audit/service.js";
 import { withIdempotency } from "../../lib/idempotency.js";
+import { assertNoNewlines } from "../players/service.js";
 
 const EULA_VERSION = "2024-01";
 
@@ -358,6 +359,43 @@ export default async function serversRoutes(app: FastifyInstance) {
       severity: "INFO",
       ipAddress: request.ip,
       metadata: { command },
+    });
+    return { ok: true };
+  });
+
+  const ChatMessageBodySchema = z.object({ message: z.string().min(1).max(256) });
+
+  // Chat bridge (the send direction — see ChatListener.java/services/agent
+  // for the receive direction): reuses the exact same "run a console
+  // command via the Agent" plumbing as /console/command above rather than
+  // a new WS command type, since a broadcast is just another console
+  // command from the server process's point of view.
+  app.post("/api/v1/servers/:id/chat", { preHandler: app.requirePermission("console.execute") }, async (request) => {
+    const { id } = request.params as { id: string };
+    assertServerAccessible(request, id);
+    const server = await requireServer(app, id);
+    if (server.status !== "ONLINE") throw new ApiError(ErrorCode.SERVER_NOT_RUNNING, "Server is not running.");
+    const { message } = ChatMessageBodySchema.parse(request.body);
+    assertNoNewlines(message, "message");
+
+    if (!app.agentHub.isConnected(server.nodeId)) throw new ApiError(ErrorCode.NODE_OFFLINE, "Node is not connected.");
+    const ack = await app.agentHub.sendCommand(server.nodeId, {
+      commandId: ulid(),
+      type: "console.command",
+      issuedAt: new Date().toISOString(),
+      payload: { serverId: id, command: `mccorebridge broadcast ${message}` },
+    });
+    if (!ack.ok) throw new ApiError(ErrorCode.INTERNAL_ERROR, ack.errorMessage ?? "Message failed.");
+
+    await recordAudit(app.prisma, {
+      actorUserId: request.user!.id,
+      action: "server.chat",
+      description: `${request.user!.name} broadcast a chat message on "${server.name}".`,
+      targetType: "server",
+      serverId: id,
+      severity: "INFO",
+      ipAddress: request.ip,
+      metadata: { message },
     });
     return { ok: true };
   });

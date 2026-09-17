@@ -1,4 +1,4 @@
-import type { World } from "@/types";
+import type { World, WorldStatsEntry } from "@/types";
 import { api, mutation } from "@/lib/api";
 import { createBackup } from "./backup-service";
 const worlds = new Map<string, World>();
@@ -9,3 +9,5 @@ export async function resetWorld(id: string) { const w = world(id); await api(`/
 export async function deleteWorld(id: string) { const w = world(id); await api(`/servers/${w.serverId}/worlds/${id}`, mutation("DELETE")); worlds.delete(id); }
 export interface CreateWorldInput { serverId: string; name: string; seed?: string; environment: World["environment"]; generator: World["generator"]; gameMode: World["gameMode"]; difficulty: World["difficulty"]; structures: boolean; hardcore: boolean; }
 export async function createWorld(input: CreateWorldInput): Promise<World> { return (await api<{ world: World }>(`/servers/${input.serverId}/worlds`, mutation("POST", input))).world; }
+/** Live snapshot via the mcCore Bridge plugin — not cached, since chunk/entity counts change too fast to trust an old one. */
+export async function getWorldStats(serverId: string): Promise<WorldStatsEntry[]> { return (await api<{ worlds: WorldStatsEntry[] }>(`/servers/${serverId}/world-stats`)).worlds; }

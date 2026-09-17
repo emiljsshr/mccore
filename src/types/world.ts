@@ -16,3 +16,10 @@ export interface World {
   lastBackup?: string;
   generator: "default" | "flat" | "large_biomes" | "amplified" | "single_biome";
 }
+
+/** Live per-world chunk/entity counts via the mcCore Bridge plugin's `/mccorebridge worldstats` — not persisted, always a fresh read. */
+export interface WorldStatsEntry {
+  name: string;
+  loadedChunks: number;
+  entityCount: number;
+}

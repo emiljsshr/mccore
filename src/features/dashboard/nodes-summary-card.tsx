@@ -4,6 +4,7 @@ import { MapPin } from "@/lib/icons";
 import { useDataStore } from "@/stores/use-data-store";
 import { NODE_STATUS_VISUALS } from "@/lib/status-config";
 import { cn } from "@/lib/utils";
+import { formatDiskSize, formatPercent } from "@/lib/format";
 
 function ProgressRow({ label, percent, display }: { label: string; percent: number; display: string }) {
   return (
@@ -52,11 +53,11 @@ export function NodesSummaryCard() {
                 {node.location}
               </p>
               <div className="space-y-1.5 pt-1">
-                <ProgressRow label="CPU" percent={node.cpu.usagePercent} display={`${node.cpu.usagePercent}%`} />
+                <ProgressRow label="CPU" percent={node.cpu.usagePercent} display={formatPercent(node.cpu.usagePercent)} />
                 <ProgressRow
                   label="Disk"
                   percent={(node.disk.usedGb / node.disk.totalGb) * 100}
-                  display={`${node.disk.usedGb} / ${node.disk.totalGb} GB`}
+                  display={formatDiskSize(node.disk.usedGb, node.disk.totalGb)}
                 />
               </div>
             </Link>

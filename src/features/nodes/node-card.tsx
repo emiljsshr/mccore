@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { NODE_STATUS_VISUALS } from "@/lib/status-config";
 import { HardDrive, MapPin, Server } from "@/lib/icons";
 import { cn } from "@/lib/utils";
+import { formatDiskSize, formatPercent } from "@/lib/format";
 
 function ProgressRow({ label, percent, display }: { label: string; percent: number; display: string }) {
   return (
@@ -53,16 +54,16 @@ export function NodeCard({ node }: { node: McNode }) {
         </div>
 
         <div className="space-y-2 border-t border-border pt-3">
-          <ProgressRow label="CPU" percent={node.cpu.usagePercent} display={`${node.cpu.usagePercent}%`} />
+          <ProgressRow label="CPU" percent={node.cpu.usagePercent} display={formatPercent(node.cpu.usagePercent)} />
           <ProgressRow
             label="RAM"
             percent={(node.memory.usedGb / node.memory.totalGb) * 100}
-            display={`${node.memory.usedGb} / ${node.memory.totalGb} GB`}
+            display={formatDiskSize(node.memory.usedGb, node.memory.totalGb)}
           />
           <ProgressRow
             label="Disk"
             percent={(node.disk.usedGb / node.disk.totalGb) * 100}
-            display={`${node.disk.usedGb} / ${node.disk.totalGb} GB`}
+            display={formatDiskSize(node.disk.usedGb, node.disk.totalGb)}
           />
         </div>
 

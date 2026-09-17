@@ -8,7 +8,7 @@ import { ServerStatusBadge } from "@/components/shared/server-status-badge";
 import { ServerBlockIcon } from "@/components/shared/server-block-icon";
 import { SoftwareIcon } from "@/components/shared/software-icon";
 import { ServerActions } from "@/components/shared/server-actions";
-import { formatMemory, formatUptime } from "@/lib/format";
+import { formatMemory, formatUptime, formatPercent } from "@/lib/format";
 import { Users } from "@/lib/icons";
 
 export const serverColumns: ColumnDef<Server>[] = [
@@ -75,7 +75,7 @@ export const serverColumns: ColumnDef<Server>[] = [
     accessorFn: (row) => row.resources.cpuPercent,
     cell: ({ row }) => (
       <span className="text-sm tabular-nums text-muted-foreground">
-        {row.original.status === "online" ? `${row.original.resources.cpuPercent}%` : "—"}
+        {row.original.status === "online" ? formatPercent(row.original.resources.cpuPercent) : "—"}
       </span>
     ),
   },

@@ -1,5 +1,5 @@
 import type { Server } from "@/types";
-import { formatMemory, formatUptime, formatDiskSize } from "@/lib/format";
+import { formatMemory, formatUptime, formatDiskSize, formatPercent } from "@/lib/format";
 import { Activity, Cpu, Gauge, HardDrive, MemoryStick, Timer, Users, Zap } from "@/lib/icons";
 import type { LucideIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,7 @@ export function ServerOverviewMetrics({ server }: { server: Server }) {
         tone={isOnline ? tpsTone : "default"}
       />
       <StatTile icon={Timer} label="MSPT" value={isOnline ? `${server.performance.mspt.toFixed(1)} ms` : "—"} />
-      <StatTile icon={Cpu} label="CPU" value={isOnline ? `${server.resources.cpuPercent}%` : "—"} />
+      <StatTile icon={Cpu} label="CPU" value={isOnline ? formatPercent(server.resources.cpuPercent) : "—"} />
       <StatTile
         icon={MemoryStick}
         label="Memory"

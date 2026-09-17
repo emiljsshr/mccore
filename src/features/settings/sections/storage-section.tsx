@@ -2,6 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useDataStore } from "@/stores/use-data-store";
+import { formatDiskSize } from "@/lib/format";
 
 export function StorageSection() {
   const mockNodes = useDataStore(s => s.nodes);
@@ -19,7 +20,7 @@ export function StorageSection() {
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">{node.name}</span>
                 <span className="text-muted-foreground">
-                  {node.disk.usedGb} / {node.disk.totalGb} GB
+                  {formatDiskSize(node.disk.usedGb, node.disk.totalGb)}
                 </span>
               </div>
               <Progress value={percent} />

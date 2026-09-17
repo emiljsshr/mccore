@@ -143,8 +143,8 @@ export function NodeDetailView({ node }: { node: McNode }) {
             <InfoRow label="Kernel" value={node.kernel} />
             <InfoRow label="Architecture" value={node.arch} />
             <InfoRow label="CPU" value={`${node.cpu.model} (${node.cpu.cores} cores)`} />
-            <InfoRow label="Memory" value={`${node.memory.totalGb} GB`} />
-            <InfoRow label="Storage" value={`${node.disk.totalGb} GB`} />
+            <InfoRow label="Memory" value={`${node.memory.totalGb.toFixed(0)} GB`} />
+            <InfoRow label="Storage" value={`${node.disk.totalGb.toFixed(0)} GB`} />
             <InfoRow label="Java Versions" value={node.javaVersions.join(", ")} />
             <InfoRow label="Agent Version" value={node.agentVersion} />
             <InfoRow label="Last Heartbeat" value={formatRelativeTime(node.lastHeartbeat)} />

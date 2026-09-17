@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Power, PowerOff, RefreshCw, Trash2, MoreHorizontal, Loader2 } from "@/lib/icons";
+import { Power, PowerOff, RefreshCw, Trash2, MoreHorizontal, Loader2 } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<InstalledPlugin["status"], { label: string; className: string }> = {
@@ -90,9 +90,6 @@ export function installedPluginColumns({ onToggle, onUpdate, onDelete, pendingId
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                <DropdownMenuItem>
-                  <Settings /> Configure
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onToggle(plugin)}>
                   {plugin.status === "enabled" ? (
                     <>

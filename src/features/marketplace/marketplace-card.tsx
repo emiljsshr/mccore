@@ -6,16 +6,29 @@ import { Button } from "@/components/ui/button";
 import { formatCompactNumber } from "@/lib/format";
 import { useServerStore } from "@/stores/use-server-store";
 import { checkCompatibility } from "@/lib/modrinth-compat";
+import { CompatibilityBadge } from "@/features/marketplace/compatibility-badge";
 import type { ModrinthSearchHit } from "@/types";
 import { cn } from "@/lib/utils";
 
-export function MarketplaceCard({ hit, onInstall }: { hit: ModrinthSearchHit; onInstall: (hit: ModrinthSearchHit) => void }) {
+interface MarketplaceCardProps {
+  hit: ModrinthSearchHit;
+  onInstall: (hit: ModrinthSearchHit) => void;
+  /** When set, shows compatibility with just this one server instead of a count across all of them. */
+  serverId?: string;
+}
+
+export function MarketplaceCard({ hit, onInstall, serverId }: MarketplaceCardProps) {
   const [iconFailed, setIconFailed] = useState(false);
   const servers = useServerStore((s) => s.servers);
+  const singleServer = serverId ? servers.find((s) => s.id === serverId) : undefined;
 
   const compatibleCount = useMemo(
     () => servers.filter((server) => checkCompatibility(hit, server).level === "compatible").length,
     [hit, servers],
+  );
+  const singleCompat = useMemo(
+    () => (singleServer ? checkCompatibility(hit, singleServer) : null),
+    [hit, singleServer],
   );
 
   return (
@@ -51,18 +64,22 @@ export function MarketplaceCard({ hit, onInstall }: { hit: ModrinthSearchHit; on
         </span>
       </div>
 
-      <div
-        className={cn(
-          "rounded-md px-2 py-1 text-[11px] font-medium",
-          compatibleCount > 0
-            ? "bg-status-online-muted text-status-online"
-            : "bg-status-critical-muted text-status-critical",
-        )}
-      >
-        {compatibleCount > 0
-          ? `Compatible with ${compatibleCount} of ${servers.length} of your servers`
-          : "Not compatible with any of your servers"}
-      </div>
+      {singleCompat ? (
+        <CompatibilityBadge level={singleCompat.level} className="self-start" />
+      ) : (
+        <div
+          className={cn(
+            "rounded-md px-2 py-1 text-[11px] font-medium",
+            compatibleCount > 0
+              ? "bg-status-online-muted text-status-online"
+              : "bg-status-critical-muted text-status-critical",
+          )}
+        >
+          {compatibleCount > 0
+            ? `Compatible with ${compatibleCount} of ${servers.length} of your servers`
+            : "Not compatible with any of your servers"}
+        </div>
+      )}
 
       <Button size="sm" onClick={() => onInstall(hit)}>
         Install

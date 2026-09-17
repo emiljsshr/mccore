@@ -28,19 +28,6 @@ export interface InstalledPlugin {
   installedAt: string;
 }
 
-export interface MarketplacePlugin {
-  id: string;
-  name: string;
-  description: string;
-  author: string;
-  category: PluginCategory;
-  downloads: number;
-  rating: number;
-  supportedVersions: string[];
-  iconLetter: string;
-  verified: boolean;
-}
-
 export const PLUGIN_CATEGORY_LABEL: Record<PluginCategory, string> = {
   administration: "Administration",
   "world-management": "World Management",

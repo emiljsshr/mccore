@@ -1,7 +1,5 @@
 import type { InstalledPlugin, ModrinthProjectTypeFilter, ModrinthSearchHit, ModrinthSearchResponse } from "@/types";
 
-import { mapModrinthCategory } from "@/lib/modrinth-compat";
-
 
 interface SearchModrinthParams {
   query: string;
@@ -38,5 +36,5 @@ export async function installModrinthProject(
   onProgress?: (stepIndex: number, step: string) => void,
 ): Promise<InstalledPlugin> {
   const { installPlugin } = await import("./plugin-service");
-  return installPlugin({ id: hit.project_id, name: hit.title, description: hit.description, author: hit.author, category: mapModrinthCategory(hit.categories), downloads: hit.downloads, rating: 0, supportedVersions: hit.versions, iconLetter: hit.title[0], verified: false }, serverId, onProgress);
+  return installPlugin(hit.project_id, serverId, onProgress);
 }

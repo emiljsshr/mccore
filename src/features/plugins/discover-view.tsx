@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Star, Download, ShieldCheck } from "@/lib/icons";
+import { toast } from "sonner";
+import { Search, Loader2, TriangleAlert } from "@/lib/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { listMarketplacePlugins } from "@/services/plugin-service";
-import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { searchModrinth } from "@/services/modrinth-service";
+import { mapModrinthCategory } from "@/lib/modrinth-compat";
 import { PLUGIN_CATEGORY_LABEL } from "@/types";
-import type { MarketplacePlugin, PluginCategory } from "@/types";
-import { formatCompactNumber } from "@/lib/format";
+import type { ModrinthSearchHit, PluginCategory } from "@/types";
+import { MarketplaceCard } from "@/features/marketplace/marketplace-card";
 import { InstallPluginDialog } from "@/features/plugins/install-plugin-dialog";
 import { cn } from "@/lib/utils";
-import { usePluginStore } from "@/stores/use-plugin-store";
 
 const CATEGORIES: (PluginCategory | "all")[] = [
   "all",
@@ -26,25 +26,57 @@ const CATEGORIES: (PluginCategory | "all")[] = [
   "utility",
 ];
 
+const PAGE_SIZE = 18;
+
 export function PluginDiscoverView({ serverId, serverName }: { serverId: string; serverName: string }) {
-  const [marketplacePlugins, setMarketplacePlugins] = useState<MarketplacePlugin[]>([]);
-  useEffect(() => { let active = true; listMarketplacePlugins().then(items => { if (active) setMarketplacePlugins(items); }).catch(e => toast.error(e.message)); return () => { active = false; }; }, []);
-  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<PluginCategory | "all">("all");
-  const [selected, setSelected] = useState<MarketplacePlugin | null>(null);
-  const installedPlugins = usePluginStore((s) => s.plugins);
-  const installedNames = useMemo(
-    () => new Set(installedPlugins.map((p) => p.name)),
-    [installedPlugins],
-  );
+  const [hits, setHits] = useState<ModrinthSearchHit[]>([]);
+  const [totalHits, setTotalHits] = useState(0);
+  const [status, setStatus] = useState<"loading" | "loading-more" | "ready" | "error">("loading");
+  const [selectedHit, setSelectedHit] = useState<ModrinthSearchHit | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      setStatus("loading");
+      searchModrinth({ query, projectType: "plugin", limit: PAGE_SIZE })
+        .then((res) => {
+          if (!active) return;
+          setHits(res.hits);
+          setTotalHits(res.total_hits);
+          setStatus("ready");
+        })
+        .catch((e) => {
+          if (!active) return;
+          setStatus("error");
+          toast.error(e.message);
+        });
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  function loadMore() {
+    setStatus("loading-more");
+    searchModrinth({ query, projectType: "plugin", limit: PAGE_SIZE, offset: hits.length })
+      .then((res) => {
+        setHits((prev) => [...prev, ...res.hits]);
+        setTotalHits(res.total_hits);
+        setStatus("ready");
+      })
+      .catch((e) => {
+        setStatus("error");
+        toast.error(e.message);
+      });
+  }
 
   const filtered = useMemo(() => {
-    return marketplacePlugins.filter((p) => {
-      const matchesCategory = category === "all" || p.category === category;
-      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [search, category, marketplacePlugins]);
+    if (category === "all") return hits;
+    return hits.filter((hit) => mapModrinthCategory(hit.categories) === category);
+  }, [hits, category]);
 
   return (
     <div className="space-y-4">
@@ -52,9 +84,9 @@ export function PluginDiscoverView({ serverId, serverName }: { serverId: string;
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search plugins"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search plugins on Modrinth..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             className="pl-8"
           />
         </div>
@@ -76,61 +108,45 @@ export function PluginDiscoverView({ serverId, serverName }: { serverId: string;
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((plugin) => {
-          const alreadyInstalled = installedNames.has(plugin.name);
-          return (
-            <div key={plugin.id} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary">
-                  {plugin.iconLetter}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-sm font-medium text-foreground">{plugin.name}</p>
-                    {plugin.verified && <ShieldCheck className="size-3.5 shrink-0 text-status-info" />}
-                  </div>
-                  <p className="text-xs text-muted-foreground">by {plugin.author}</p>
-                </div>
-              </div>
+      {status === "loading" ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-xl" />
+          ))}
+        </div>
+      ) : status === "error" ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+          <TriangleAlert className="size-5 text-status-critical" />
+          Couldn&apos;t reach Modrinth. Check your connection and try again.
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+          No plugins match {query ? `"${query}"` : "this category"}.
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((hit) => (
+              <MarketplaceCard key={hit.project_id} hit={hit} onInstall={setSelectedHit} serverId={serverId} />
+            ))}
+          </div>
 
-              <p className="line-clamp-2 flex-1 text-xs text-muted-foreground">{plugin.description}</p>
-
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Download className="size-3" /> {formatCompactNumber(plugin.downloads)}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Star className="size-3 fill-status-warning text-status-warning" /> {plugin.rating.toFixed(1)}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-1">
-                {plugin.supportedVersions.map((v) => (
-                  <Badge key={v} variant="secondary" className="text-[10px]">
-                    {v}
-                  </Badge>
-                ))}
-              </div>
-
-              <Button
-                size="sm"
-                variant={alreadyInstalled ? "outline" : "default"}
-                disabled={alreadyInstalled}
-                onClick={() => setSelected(plugin)}
-              >
-                {alreadyInstalled ? "Installed" : "Install"}
+          {category === "all" && hits.length < totalHits && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={status === "loading-more"}>
+                {status === "loading-more" && <Loader2 className="size-3.5 animate-spin" />}
+                Load more
               </Button>
             </div>
-          );
-        })}
-      </div>
+          )}
+        </>
+      )}
 
       <InstallPluginDialog
-        plugin={selected}
+        hit={selectedHit}
         serverId={serverId}
         serverName={serverName}
-        onOpenChange={(open) => !open && setSelected(null)}
+        onOpenChange={(open) => !open && setSelectedHit(null)}
       />
     </div>
   );

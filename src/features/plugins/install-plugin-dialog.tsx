@@ -1,8 +1,7 @@
 "use client";
+
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-
-
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,48 +13,42 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CircleCheck, Download, Loader2, PackageCheck } from "@/lib/icons";
-import type { MarketplacePlugin } from "@/types";
-import { INSTALL_PLUGIN_STEPS, installPlugin } from "@/services";
+import type { ModrinthSearchHit } from "@/types";
+import { INSTALL_MODRINTH_STEPS, installModrinthProject } from "@/services";
+import { useServerStore } from "@/stores/use-server-store";
+import { checkCompatibility } from "@/lib/modrinth-compat";
+import { CompatibilityBadge } from "@/features/marketplace/compatibility-badge";
 import { cn } from "@/lib/utils";
 
 interface InstallPluginDialogProps {
-  plugin: MarketplacePlugin | null;
+  hit: ModrinthSearchHit | null;
   serverId: string;
   serverName: string;
   onOpenChange: (open: boolean) => void;
-  onInstalled?: () => void;
 }
 
-const DEPENDENCIES: Record<string, string[]> = {
-  "mp-fastasyncworldedit": ["WorldEdit"],
-  "mp-townyadvanced": ["Vault"],
-  "mp-deluxemenus": ["PlaceholderAPI"],
-};
-
-export function InstallPluginDialog({
-  plugin,
-  serverId,
-  serverName,
-  onOpenChange,
-  onInstalled,
-}: InstallPluginDialogProps) {
+export function InstallPluginDialog({ hit, serverId, serverName, onOpenChange }: InstallPluginDialogProps) {
+  const server = useServerStore((s) => s.servers.find((srv) => srv.id === serverId));
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [done, setDone] = useState(false);
 
-  if (!plugin) return null;
-
-  const dependencies = DEPENDENCIES[plugin.id] ?? [];
+  const compat = useMemo(() => (hit && server ? checkCompatibility(hit, server) : null), [hit, server]);
   const installing = stepIndex !== null && !done;
 
+  if (!hit) return null;
+
   async function handleInstall() {
-    if (!plugin) return;
+    if (!hit) return;
     setStepIndex(0);
     setDone(false);
     try {
-    await installPlugin(plugin, serverId, (index) => setStepIndex(index));
-    setDone(true);
-    onInstalled?.();
-    } catch(e) { toast.error((e as Error).message); setStepIndex(null); }
+      await installModrinthProject(hit, serverId, (index) => setStepIndex(index));
+      setDone(true);
+      toast.success(`${hit.title} installed on ${serverName}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+      setStepIndex(null);
+    }
   }
 
   function handleClose(open: boolean) {
@@ -66,37 +59,40 @@ export function InstallPluginDialog({
   }
 
   return (
-    <Dialog open={Boolean(plugin)} onOpenChange={handleClose}>
+    <Dialog open={Boolean(hit)} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Install {plugin.name}</DialogTitle>
-          <DialogDescription>{plugin.description}</DialogDescription>
+          <DialogTitle>Install {hit.title}</DialogTitle>
+          <DialogDescription>{hit.description}</DialogDescription>
         </DialogHeader>
 
         {stepIndex === null ? (
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
-              <span className="text-muted-foreground">Plugin</span>
-              <span className="font-medium text-foreground">{plugin.name}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
-              <span className="text-muted-foreground">Version</span>
-              <span className="font-medium text-foreground">{plugin.supportedVersions[0]}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
               <span className="text-muted-foreground">Target Server</span>
               <span className="font-medium text-foreground">{serverName}</span>
             </div>
-            {dependencies.length > 0 && (
-              <div className="rounded-md border border-status-warning/30 bg-status-warning-muted px-3 py-2">
-                <p className="font-medium text-status-warning">Requires dependencies</p>
-                <p className="text-foreground/80">{dependencies.join(", ")}</p>
+            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
+              <span className="text-muted-foreground">Compatibility</span>
+              {compat && <CompatibilityBadge level={compat.level} />}
+            </div>
+            {compat && compat.level !== "compatible" && (
+              <div
+                className={cn(
+                  "rounded-md border px-3 py-2 text-xs",
+                  compat.level === "incompatible"
+                    ? "border-status-critical/30 bg-status-critical-muted text-status-critical"
+                    : "border-status-warning/30 bg-status-warning-muted text-status-warning",
+                )}
+              >
+                <p className="font-medium">{compat.level === "incompatible" ? "This may not work" : "Possible issue"}</p>
+                <p className="text-foreground/80">{compat.reason}</p>
               </div>
             )}
           </div>
         ) : (
           <div className="space-y-3 py-2">
-            {INSTALL_PLUGIN_STEPS.map((step, index) => {
+            {INSTALL_MODRINTH_STEPS.map((step, index) => {
               const isCurrent = index === stepIndex && !done;
               const isComplete = index < stepIndex || done;
               return (
@@ -118,7 +114,7 @@ export function InstallPluginDialog({
                 Restart the server for changes to take effect.
               </div>
             )}
-            <Progress value={done ? 100 : ((stepIndex + 1) / INSTALL_PLUGIN_STEPS.length) * 100} />
+            <Progress value={done ? 100 : ((stepIndex + 1) / INSTALL_MODRINTH_STEPS.length) * 100} />
           </div>
         )}
 
@@ -130,9 +126,13 @@ export function InstallPluginDialog({
               <Button variant="outline" onClick={() => handleClose(false)} disabled={installing}>
                 Cancel
               </Button>
-              <Button onClick={handleInstall} disabled={installing}>
+              <Button
+                onClick={handleInstall}
+                disabled={installing}
+                variant={compat && compat.level !== "compatible" ? "destructive" : "default"}
+              >
                 {installing ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                Install
+                {compat && compat.level !== "compatible" ? "Install Anyway" : "Install"}
               </Button>
             </>
           )}

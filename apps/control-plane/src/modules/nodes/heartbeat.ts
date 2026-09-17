@@ -69,6 +69,7 @@ export async function applyHeartbeat(app: FastifyInstance, frame: { kind: "heart
       where: { nodeId: frame.nodeId, deletedAt: null },
       select: { id: true, status: true },
     });
+    const knownIds = new Set(servers.map((server) => server.id));
     for (const server of servers) {
       const isRunning = frame.runningServerIds.includes(server.id);
       const driftedOnline = !isRunning && server.status === "ONLINE";
@@ -79,6 +80,29 @@ export async function applyHeartbeat(app: FastifyInstance, frame: { kind: "heart
       } else if (driftedOffline) {
         await app.prisma.minecraftServer.update({ where: { id: server.id }, data: { status: "ONLINE" } });
         app.liveHub.broadcast(`server:${server.id}`, "server.status", server.id, { status: "online" });
+      }
+    }
+
+    // A server whose delete command never reached the agent (disconnected
+    // at the time, or lost in a race with a concurrent stop/restart) is
+    // soft-deleted here and so permanently excluded from the loop above —
+    // without this it keeps its port bound forever with no way to retry
+    // from the dashboard, since the deleted row no longer shows there.
+    const orphanedIds = frame.runningServerIds.filter((id) => !knownIds.has(id));
+    if (orphanedIds.length > 0) {
+      const deletedButRunning = await app.prisma.minecraftServer.findMany({
+        where: { id: { in: orphanedIds }, nodeId: frame.nodeId, deletedAt: { not: null } },
+        select: { id: true },
+      });
+      for (const server of deletedButRunning) {
+        await app.agentHub
+          .sendCommand(frame.nodeId, {
+            commandId: ulid(),
+            type: "server.kill",
+            issuedAt: new Date().toISOString(),
+            payload: { serverId: server.id },
+          })
+          .catch((err) => app.log.warn({ err, serverId: server.id }, "orphan server.kill command failed"));
       }
     }
   }

@@ -231,7 +231,7 @@ export default async function serversRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     assertServerAccessible(request, id);
     const server = await requireServer(app, id);
-    if (server.status === "ONLINE" || server.status === "STARTING") {
+    if (["ONLINE", "STARTING", "STOPPING", "RESTARTING"].includes(server.status)) {
       throw new ApiError(ErrorCode.CONFLICT, "Stop the server before deleting it.");
     }
     const deleteFiles = (request.query as { deleteFiles?: string }).deleteFiles === "true";

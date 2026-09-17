@@ -40,6 +40,7 @@ export {
   IconCopy as Copy,
   IconCpu as Cpu,
   IconDatabase as Database,
+  IconDeviceGamepad2 as Gamepad2,
   IconDoorEnter as DoorEnter,
   IconDoorExit as DoorExit,
   IconDownload as Download,

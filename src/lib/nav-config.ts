@@ -4,6 +4,7 @@ import {
   Network,
   HardDrive,
   Users,
+  Gamepad2,
   CalendarClock,
   Archive,
   Activity,
@@ -30,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Servers", href: "/servers", icon: Server },
+      { label: "Players", href: "/players", icon: Gamepad2 },
       { label: "Plugins & Mods", href: "/plugins", icon: Box },
       { label: "Networks", href: "/networks", icon: Network },
       { label: "Nodes", href: "/nodes", icon: HardDrive },

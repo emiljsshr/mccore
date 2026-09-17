@@ -14,6 +14,7 @@ export interface Breadcrumb {
 const STATIC_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   servers: "Servers",
+  players: "Players",
   networks: "Networks",
   nodes: "Nodes",
   users: "Users",

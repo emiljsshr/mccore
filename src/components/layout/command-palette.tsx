@@ -31,6 +31,7 @@ import {
   Server as ServerIcon,
   Settings,
   Users,
+  Gamepad2,
   CalendarClock,
   Archive,
   Activity,
@@ -155,10 +156,7 @@ export function CommandPalette() {
                 <CommandSeparator />
                 <CommandGroup heading="Players">
                   {filteredPlayers.map((player) => (
-                    <CommandItem
-                      key={player.id}
-                      onSelect={() => go(`/servers/${player.serverId ?? "srv-survival"}/players`)}
-                    >
+                    <CommandItem key={player.id} onSelect={() => go("/players")}>
                       <PlayerAvatar seed={player.avatarSeed} size="xs" />
                       {player.username}
                     </CommandItem>
@@ -175,6 +173,9 @@ export function CommandPalette() {
               </CommandItem>
               <CommandItem onSelect={() => go("/servers")}>
                 <ServerIcon /> All Servers
+              </CommandItem>
+              <CommandItem onSelect={() => go("/players")}>
+                <Gamepad2 /> Players
               </CommandItem>
               <CommandItem onSelect={() => go("/plugins")}>
                 <Box /> Plugins &amp; Mods
